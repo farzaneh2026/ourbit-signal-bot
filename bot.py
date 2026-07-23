@@ -23,25 +23,13 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         coin = "BTC"
 
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin.lower()}&vs_currencies=usd"
-    data = requests.get(url).json()
-    price = float(data[coin.lower()]["usd"])
-    
-
-    tp1 = round(price * 1.015, 2)
-
-    tp1 = round(price * 1.015, 2)
-    tp2 = round(price * 1.03, 2)
-    sl = round(price * 0.985, 2)
-
     await update.message.reply_text(
         f"📊 سیگنال {coin}/USDT\n\n"
-        f"💰 قیمت فعلی: {price}\n\n"
         "🟢 Buy\n"
-        f"Entry: {price}\n"
-        f"TP1: {tp1}\n"
-        f"TP2: {tp2}\n"
-        f"SL: {sl}"
+        "Entry: تست\n"
+        "TP1: تست\n"
+        "TP2: تست\n"
+        "SL: تست"
     )
     
 def main():
