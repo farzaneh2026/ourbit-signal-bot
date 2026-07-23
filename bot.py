@@ -22,14 +22,22 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         coin = context.args[0].upper()
     else:
         coin = "BTC"
+    url = f"https://api.binance.com/api/v3/ticker/price?symbol={coin}USDT"
+    data = requests.get(url).json()
+    price = float(data["price"])
+
+    tp1 = round(price * 1.015, 2)
+    tp2 = round(price * 1.03, 2)
+    sl = round(price * 0.985, 2)
 
     await update.message.reply_text(
         f"📊 سیگنال {coin}/USDT\n\n"
+        f"💰 قیمت فعلی: {price}\n\n"
         "🟢 Buy\n"
-        "Entry: 100.00\n"
-        "TP1: 101.50\n"
-        "TP2: 103.00\n"
-        "SL: 98.50"
+        f"Entry: {price}\n"
+        f"TP1: {tp1}\n"
+        f"TP2: {tp2}\n"
+        f"SL: {sl}"
     )
 def main():
     app = Application.builder().token(TOKEN).build()
