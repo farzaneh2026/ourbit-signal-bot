@@ -26,6 +26,7 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin.lower()}&vs_currencies=usd"
     data = requests.get(url).json()
     price = float(data[coin.lower()]["usd"])
+    
 
     tp1 = round(price * 1.015, 2)
 
