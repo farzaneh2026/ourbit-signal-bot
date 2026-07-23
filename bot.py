@@ -18,7 +18,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         coin = context.args[0].upper()
     else:
@@ -32,7 +31,6 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "TP2: 103.00\n"
         "SL: 98.50"
     )
-
 def main():
     app = Application.builder().token(TOKEN).build()
 
