@@ -24,7 +24,8 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         coin = "BTC"
 
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={coin}USDT"
-    data = requests.get(url).json()await update.message.reply_text(str(data))
+    data = requests.get(url).json()
+    await update.message.reply_text(str(data))
     price = float(data["price"])
 
     tp1 = round(price * 1.015, 2)
