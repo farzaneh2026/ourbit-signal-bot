@@ -32,7 +32,6 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "TP2: 103.00\n"
         "SL: 98.50"
     )
-    )
 
 def main():
     app = Application.builder().token(TOKEN).build()
