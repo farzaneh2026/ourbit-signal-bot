@@ -20,8 +20,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         coin = context.args[0].upper()
-    else:
-        coin = "BTC"
+          else:
+coin = "BTC"
+    
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={coin}USDT"
     data = requests.get(url).json()
     price = float(data["price"])
