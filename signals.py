@@ -7,9 +7,16 @@ exchange = ccxt.kucoin()
 
 def get_signal():
     symbols = [
-        "BTC/USDT",
-        "ETH/USDT",
-        "SOL/USDT"
+    "BTC/USDT",
+    "ETH/USDT",
+    "SOL/USDT",
+    "XRP/USDT",
+    "ADA/USDT",
+    "DOGE/USDT",
+    "DOT/USDT",
+    "LTC/USDT",
+    "AVAX/USDT",
+    "LINK/USDT"
     ]
 
     for symbol in symbols:
