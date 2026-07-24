@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import os
-import requests
+import requestsfrom signals import get_signal, format_signal
 TOKEN = os.getenv("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -23,7 +23,10 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         coin = "BTC"
 
-    await update.message.reply_text(
+    await update.message.async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = get_signal()
+    text = format_signal(data)
+    await update.message.reply_text(text)(
         f"📊 سیگنال {coin}/USDT\n\n"
         "🟢 Buy\n"
         "Entry: تست\n"
