@@ -44,7 +44,7 @@ def get_signal():
             ema50 = df["ema50"].iloc[-1]
             ema200 = df["ema200"].iloc[-1]
 
-            if price > ema50 and price > ema200:
+            if price > ema50 
                 return {
                     "symbol": symbol,
                     "action": "BUY",
@@ -54,7 +54,7 @@ def get_signal():
                     "sl": price * 0.98
                 }
 
-            elif price < ema50 and price < ema200:
+            elif price < ema50
                 return {
                     "symbol": symbol,
                     "action": "SELL",
