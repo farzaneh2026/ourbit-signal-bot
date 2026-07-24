@@ -25,10 +25,7 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
     
     
-        "TP1: تست\n"
-        "TP2: تست\n"
-        "SL: تست"
-    )
+
     
 def main():
     app = Application.builder().token(TOKEN).build()
