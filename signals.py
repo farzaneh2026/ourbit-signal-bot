@@ -52,8 +52,7 @@ def get_signal():
                     "tp1": price * 1.02,
                     "tp2": price * 1.04,
                     "sl": price * 0.98
-                }
-            elif price < ema50 and price < ema200:
+                }elif price < ema50 and price < ema200:
     return {
         "symbol": symbol,
         "action": "SELL",
@@ -61,6 +60,8 @@ def get_signal():
         "tp1": price * 0.98,
         "tp2": price * 0.96,
         "sl": price * 1.02
+}
+        
     
 
         except Exception:
