@@ -1,7 +1,9 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import os
-import requestsfrom signals import get_signal, format_signal
+import requests
+
+from signals import get_signal, format_signal
 TOKEN = os.getenv("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
