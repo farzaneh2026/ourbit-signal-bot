@@ -2,7 +2,7 @@ import ccxt
 import pandas as pd
 
 
-exchange = ccxt.ourbit()
+exchange = None
 
 
 def get_signal():
