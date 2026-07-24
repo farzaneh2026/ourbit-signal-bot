@@ -1,39 +1,56 @@
-import random
+import ccxt
+import pandas as pd
+
+
+exchange = ccxt.ourbit()
 
 
 def get_signal():
-    # نسخه اولیه استراتژی
-    # بعداً به قیمت واقعی اوربیت وصل می‌کنیم
+    symbol = "BTC/USDT"
 
-    coins = [
-        "BTC",
-        "ETH",
-        "SOL",
-        "DOGE",
-        "ADA",
-        "XRP"
-    ]
+    try:
+        candles = exchange.fetch_ohlcv(
+            symbol,
+            timeframe="15m",
+            limit=100
+        )
 
-    coin = random.choice(coins)
+        df = pd.DataFrame(
+            candles,
+            columns=["time","open","high","low","close","volume"]
+        )
 
-    # تست تحلیل
-    rsi = random.randint(30, 70)
+        close = df["close"]
 
-    if rsi < 45:
-        action = "BUY"
-    elif rsi > 60:
-        action = "SELL"
-    else:
-        action = "WAIT"
+        ema50 = close.ewm(span=50).mean().iloc[-1]
+        ema200 = close.ewm(span=200).mean().iloc[-1]
+        price = close.iloc[-1]
 
-    return {
-        "symbol": f"{coin}/USDT",
-        "action": action,
-        "entry": "قیمت لحظه‌ای",
-        "tp1": "+2%",
-        "tp2": "+4%",
-        "sl": "-2%"
-    }
+        if price > ema50 and price > ema200:
+            action = "BUY"
+        elif price < ema50 and price < ema200:
+            action = "SELL"
+        else:
+            action = "WAIT"
+
+        return {
+            "symbol": symbol,
+            "action": action,
+            "entry": price,
+            "tp1": f"{price*1.02:.4f}",
+            "tp2": f"{price*1.04:.4f}",
+            "sl": f"{price*0.98:.4f}"
+        }
+
+    except Exception as e:
+        return {
+            "symbol": symbol,
+            "action": "ERROR",
+            "entry": str(e),
+            "tp1": "-",
+            "tp2": "-",
+            "sl": "-"
+        }
 
 
 def format_signal(signal):
@@ -47,6 +64,4 @@ def format_signal(signal):
 ✅ TP1: {signal['tp1']}
 ✅ TP2: {signal['tp2']}
 🛑 SL: {signal['sl']}
-
-⚠️ معامله را خودت باز کن.
 """
