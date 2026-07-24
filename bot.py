@@ -24,7 +24,7 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = format_signal(data)
     await update.message.reply_text(text)
     
-        "Entry: تست\n"
+    
         "TP1: تست\n"
         "TP2: تست\n"
         "SL: تست"
