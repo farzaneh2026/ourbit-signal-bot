@@ -20,15 +20,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.args:
-        coin = context.args[0].upper()
-    else:
-        coin = "BTC"
-
-    await update.message.async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = get_signal()
     text = format_signal(data)
-    await update.message.reply_text(text)(
+    await update.message.reply_text(text)
         f"📊 سیگنال {coin}/USDT\n\n"
         "🟢 Buy\n"
         "Entry: تست\n"
