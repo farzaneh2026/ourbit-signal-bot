@@ -23,8 +23,7 @@ async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = get_signal()
     text = format_signal(data)
     await update.message.reply_text(text)
-        f"📊 سیگنال {coin}/USDT\n\n"
-        "🟢 Buy\n"
+    
         "Entry: تست\n"
         "TP1: تست\n"
         "TP2: تست\n"
