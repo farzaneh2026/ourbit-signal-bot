@@ -1,8 +1,6 @@
-
 import ccxt
 import pandas as pd
 import ta
-
 
 exchange = ccxt.kucoin()
 
@@ -35,16 +33,11 @@ def get_signal():
                 df["close"], window=200
             ).ema_indicator()
 
-            df["rsi"] = ta.momentum.RSIIndicator(
-                df["close"], window=14
-            ).rsi()
-
             price = df["close"].iloc[-1]
             ema50 = df["ema50"].iloc[-1]
             ema200 = df["ema200"].iloc[-1]
-            rsi = df["rsi"].iloc[-1]
 
-                        if price > ema50 and price > ema200:
+            if price > ema50 and price > ema200:
                 return {
                     "symbol": symbol,
                     "action": "BUY",
@@ -63,9 +56,6 @@ def get_signal():
                     "tp2": price * 0.96,
                     "sl": price * 1.02
                 }
-        
-        
-    
 
         except Exception:
             continue
