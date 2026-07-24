@@ -1,29 +1,47 @@
-# signals.py
+import random
+
 
 def get_signal():
-    """
-    تولید سیگنال ساده (نسخه اولیه)
-    بعداً به اندیکاتورها و تحلیل هوش مصنوعی وصل می‌کنیم
-    """
+    # نسخه اولیه استراتژی
+    # بعداً به قیمت واقعی اوربیت وصل می‌کنیم
 
-    signal = {
-        "symbol": "BTC/USDT",
-        "action": "BUY",
-        "entry": "قیمت فعلی",
+    coins = [
+        "BTC",
+        "ETH",
+        "SOL",
+        "DOGE",
+        "ADA",
+        "XRP"
+    ]
+
+    coin = random.choice(coins)
+
+    # تست تحلیل
+    rsi = random.randint(30, 70)
+
+    if rsi < 45:
+        action = "BUY"
+    elif rsi > 60:
+        action = "SELL"
+    else:
+        action = "WAIT"
+
+    return {
+        "symbol": f"{coin}/USDT",
+        "action": action,
+        "entry": "قیمت لحظه‌ای",
         "tp1": "+2%",
         "tp2": "+4%",
         "sl": "-2%"
     }
 
-    return signal
-
 
 def format_signal(signal):
     return f"""
-🤖 سیگنال هوش مصنوعی
+🤖 Ourbit AI Signal
 
-ارز: {signal['symbol']}
-📈 وضعیت: {signal['action']}
+💰 ارز: {signal['symbol']}
+📊 وضعیت: {signal['action']}
 
 🎯 ورود: {signal['entry']}
 ✅ TP1: {signal['tp1']}
