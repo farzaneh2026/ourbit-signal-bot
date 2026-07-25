@@ -1,7 +1,6 @@
+
 python-telegram-bot==21.6
 requests
-pandas
-ta
 ccxt
 pandas
 ta
