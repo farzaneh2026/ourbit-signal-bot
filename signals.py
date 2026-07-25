@@ -32,7 +32,14 @@ def get_signal():
 
             df = pd.DataFrame(
                 candles,
-                columns=["time", "open", "high", "low", "close", "volume"]
+                columns=[
+                    "time",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume"
+                ]
             )
 
             df["ema50"] = ta.trend.EMAIndicator(
@@ -56,39 +63,62 @@ def get_signal():
             macd_value = float(df["macd"].iloc[-1])
             macd_signal = float(df["macd_signal"].iloc[-1])
 
+            volume_now = float(df["volume"].iloc[-1])
+            volume_avg = float(df["volume"].tail(20).mean())
 
-            if price > ema50 and rsi < 70 and macd_value > macd_signal:
+            score = 0
 
-                action = "BUY"
+            if price > ema50:
+                score += 30
+                trend = "BUY"
+            elif price < ema50:
+                score += 30
+                trend = "SELL"
+            else:
+                continue
 
+            if trend == "BUY" and rsi < 70:
+                score += 30
+
+            elif trend == "SELL" and rsi > 30:
+                score += 30
+
+            else:
+                continue
+
+            if trend == "BUY" and macd_value > macd_signal:
+                score += 30
+
+            elif trend == "SELL" and macd_value < macd_signal:
+                score += 30
+
+            else:
+                continue
+
+            if volume_now > volume_avg:
+                score += 10
+
+            if score < 60:
+                continue
+
+            if trend == "BUY":
                 tp1 = round(price * 1.02, 2)
                 tp2 = round(price * 1.04, 2)
                 tp3 = round(price * 1.06, 2)
                 sl = round(price * 0.98, 2)
 
-                strength = 90
-
-
-            elif price < ema50 and rsi > 30 and macd_value < macd_signal:
-
-                action = "SELL"
-
+            else:
                 tp1 = round(price * 0.98, 2)
                 tp2 = round(price * 0.96, 2)
                 tp3 = round(price * 0.94, 2)
                 sl = round(price * 1.02, 2)
 
-                strength = 90
 
-            else:
-                continue
-
-
-            if best is None or strength > best["strength"]:
+            if best is None or score > best["score"]:
                 best = {
-                    "strength": strength,
+                    "score": score,
                     "symbol": symbol,
-                    "action": action,
+                    "action": trend,
                     "order_type": "LIMIT",
                     "entry": round(price, 2),
                     "tp1": tp1,
@@ -96,14 +126,11 @@ def get_signal():
                     "tp3": tp3,
                     "sl": sl,
                     "rsi": round(rsi, 2),
-                    "strength_percent": strength
                 }
 
 
         if best:
-            del best["strength"]
             return best
-
 
         return {
             "symbol": "NONE",
@@ -115,7 +142,7 @@ def get_signal():
             "tp3": "-",
             "sl": "-",
             "rsi": "-",
-            "strength_percent": "-"
+            "score": "-"
         }
 
 
@@ -130,8 +157,9 @@ def get_signal():
             "tp3": "-",
             "sl": "-",
             "rsi": "-",
-            "strength_percent": "-"
+            "score": "-"
         }
+
 
 
 def format_signal(signal):
@@ -141,7 +169,7 @@ def format_signal(signal):
 📊 وضعیت: {signal['action']}
 📌 سفارش: {signal['order_type']}
 
-⭐ قدرت سیگنال: {signal['strength_percent']}%
+⭐ قدرت سیگنال: {signal['score']}/100
 
 🎯 ورود: {signal['entry']}
 
@@ -153,6 +181,7 @@ def format_signal(signal):
 
 📈 RSI: {signal['rsi']}
 📊 MACD: ✅
+📊 Volume: ✅
 
 ⚠️ معامله را دستی انجام بده.
 """
