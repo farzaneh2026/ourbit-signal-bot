@@ -98,7 +98,8 @@ def get_signal():
             volume_avg = float(df["volume"].tail(20).mean())
 
 
-            score = 0            if price > ema:
+            score = 0         
+            if price > ema:
                 action = "BUY"
                 score += 30
             elif price < ema:
