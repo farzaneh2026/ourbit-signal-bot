@@ -6,80 +6,61 @@ exchange = ccxt.kucoin()
 
 
 def get_signal():
-    symbols = [
-    "BTC/USDT",
-    "ETH/USDT",
-    "SOL/USDT",
-    "XRP/USDT",
-    "ADA/USDT",
-    "DOGE/USDT",
-    "DOT/USDT",
-    "LTC/USDT",
-    "AVAX/USDT",
-    "LINK/USDT"
-    ]
+    try:
+        symbol = "BTC/USDT"
 
-    for symbol in symbols:
-        try:
-            candles = exchange.fetch_ohlcv(
-                symbol,
-                timeframe="15m",
-                limit=100
-            )
+        candles = exchange.fetch_ohlcv(
+            symbol,
+            timeframe="15m",
+            limit=100
+        )
 
-            df = pd.DataFrame(
-                candles,
-                columns=["time","open","high","low","close","volume"]
-            )
+        df = pd.DataFrame(
+            candles,
+            columns=["time", "open", "high", "low", "close", "volume"]
+        )
 
-            df["ema50"] = ta.trend.EMAIndicator(
-                df["close"], window=50
-            ).ema_indicator()
+        df["ema50"] = ta.trend.EMAIndicator(
+            df["close"],
+            window=50
+        ).ema_indicator()
 
-            df["ema200"] = ta.trend.EMAIndicator(
-                df["close"], window=200
-            ).ema_indicator()
+        price = float(df["close"].iloc[-1])
+        ema50 = float(df["ema50"].iloc[-1])
 
-            price = df["close"].iloc[-1]
-            ema50 = df["ema50"].iloc[-1]
-            ema200 = df["ema200"].iloc[-1]
+        if price > ema50:
+            action = "BUY"
+            tp1 = round(price * 1.02, 2)
+            tp2 = round(price * 1.04, 2)
+            sl = round(price * 0.98, 2)
+        else:
+            action = "SELL"
+            tp1 = round(price * 0.98, 2)
+            tp2 = round(price * 0.96, 2)
+            sl = round(price * 1.02, 2)
 
-                        if price > ema50:
-                return {
-                    "symbol": symbol,
-                    "action": "BUY",
-                    "entry": price,
-                    "tp1": price * 1.02,
-                    "tp2": price * 1.04,
-                    "sl": price * 0.98
-                }
+        return {
+            "symbol": symbol,
+            "action": action,
+            "entry": round(price, 2),
+            "tp1": tp1,
+            "tp2": tp2,
+            "sl": sl
+        }
 
-            elif price < ema50:
-                return {
-                    "symbol": symbol,
-                    "action": "SELL",
-                    "entry": price,
-                    "tp1": price * 0.98,
-                    "tp2": price * 0.96,
-                    "sl": price * 1.02
-                }
-
-        except Exception:
-            continue
-
-    return {
-        "symbol": "NONE",
-        "action": "WAIT",
-        "entry": "-",
-        "tp1": "-",
-        "tp2": "-",
-        "sl": "-"
-    }
+    except Exception as e:
+        return {
+            "symbol": "ERROR",
+            "action": "ERROR",
+            "entry": str(e),
+            "tp1": "-",
+            "tp2": "-",
+            "sl": "-"
+        }
 
 
 def format_signal(signal):
-    return f"""
-🤖 Ourbit AI Signal
+    return f"""🤖 Ourbit AI Signal
 
 💰 ارز: {signal['symbol']}
 📊 وضعیت: {signal['action']}
