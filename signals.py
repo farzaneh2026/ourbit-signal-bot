@@ -45,9 +45,7 @@ def get_signal():
                 window=14
             ).rsi()
 
-            macd = ta.trend.MACD(
-                df["close"]
-            )
+            macd = ta.trend.MACD(df["close"])
 
             df["macd"] = macd.macd()
             df["macd_signal"] = macd.macd_signal()
@@ -60,23 +58,27 @@ def get_signal():
 
 
             if price > ema50 and rsi < 70 and macd_value > macd_signal:
+
                 action = "BUY"
 
                 tp1 = round(price * 1.02, 2)
                 tp2 = round(price * 1.04, 2)
+                tp3 = round(price * 1.06, 2)
                 sl = round(price * 0.98, 2)
 
-                strength = 3
+                strength = 90
 
 
             elif price < ema50 and rsi > 30 and macd_value < macd_signal:
+
                 action = "SELL"
 
                 tp1 = round(price * 0.98, 2)
                 tp2 = round(price * 0.96, 2)
+                tp3 = round(price * 0.94, 2)
                 sl = round(price * 1.02, 2)
 
-                strength = 3
+                strength = 90
 
             else:
                 continue
@@ -87,11 +89,14 @@ def get_signal():
                     "strength": strength,
                     "symbol": symbol,
                     "action": action,
+                    "order_type": "LIMIT",
                     "entry": round(price, 2),
                     "tp1": tp1,
                     "tp2": tp2,
+                    "tp3": tp3,
                     "sl": sl,
-                    "rsi": round(rsi, 2)
+                    "rsi": round(rsi, 2),
+                    "strength_percent": strength
                 }
 
 
@@ -103,11 +108,14 @@ def get_signal():
         return {
             "symbol": "NONE",
             "action": "WAIT",
+            "order_type": "-",
             "entry": "-",
             "tp1": "-",
             "tp2": "-",
+            "tp3": "-",
             "sl": "-",
-            "rsi": "-"
+            "rsi": "-",
+            "strength_percent": "-"
         }
 
 
@@ -115,13 +123,15 @@ def get_signal():
         return {
             "symbol": "ERROR",
             "action": "ERROR",
+            "order_type": "-",
             "entry": str(e),
             "tp1": "-",
             "tp2": "-",
+            "tp3": "-",
             "sl": "-",
-            "rsi": "-"
+            "rsi": "-",
+            "strength_percent": "-"
         }
-
 
 
 def format_signal(signal):
@@ -129,10 +139,16 @@ def format_signal(signal):
 
 💰 ارز: {signal['symbol']}
 📊 وضعیت: {signal['action']}
+📌 سفارش: {signal['order_type']}
+
+⭐ قدرت سیگنال: {signal['strength_percent']}%
 
 🎯 ورود: {signal['entry']}
+
 ✅ TP1: {signal['tp1']}
 ✅ TP2: {signal['tp2']}
+✅ TP3: {signal['tp3']}
+
 🛑 SL: {signal['sl']}
 
 📈 RSI: {signal['rsi']}
