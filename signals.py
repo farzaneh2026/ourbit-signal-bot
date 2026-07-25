@@ -6,6 +6,7 @@ exchange = ccxt.kucoin()
 
 
 def get_signal():
+
     symbols = [
         "BTC/USDT",
         "ETH/USDT",
@@ -16,14 +17,25 @@ def get_signal():
         "ADA/USDT",
         "TRX/USDT",
         "LINK/USDT",
-        "AVAX/USDT"
+        "AVAX/USDT",
+        "DOT/USDT",
+        "LTC/USDT",
+        "ATOM/USDT",
+        "UNI/USDT",
+        "ETC/USDT",
+        "FIL/USDT",
+        "APT/USDT",
+        "ARB/USDT",
+        "OP/USDT",
+        "NEAR/USDT"
     ]
 
-    best = None
+    best_signal = None
 
-    try:
-        for symbol in symbols:
 
+    for symbol in symbols:
+
+        try:
             candles = exchange.fetch_ohlcv(
                 symbol,
                 timeframe="15m",
@@ -42,128 +54,144 @@ def get_signal():
                 ]
             )
 
+
             df["ema50"] = ta.trend.EMAIndicator(
                 df["close"],
                 window=50
             ).ema_indicator()
+
 
             df["rsi"] = ta.momentum.RSIIndicator(
                 df["close"],
                 window=14
             ).rsi()
 
-            macd = ta.trend.MACD(df["close"])
+
+            macd = ta.trend.MACD(
+                df["close"]
+            )
 
             df["macd"] = macd.macd()
             df["macd_signal"] = macd.macd_signal()
 
+
+            atr = ta.volatility.AverageTrueRange(
+                df["high"],
+                df["low"],
+                df["close"],
+                window=14
+            )
+
+            df["atr"] = atr.average_true_range()
+
+
             price = float(df["close"].iloc[-1])
-            ema50 = float(df["ema50"].iloc[-1])
+            ema = float(df["ema50"].iloc[-1])
             rsi = float(df["rsi"].iloc[-1])
+
             macd_value = float(df["macd"].iloc[-1])
             macd_signal = float(df["macd_signal"].iloc[-1])
+
+            atr_value = float(df["atr"].iloc[-1])
 
             volume_now = float(df["volume"].iloc[-1])
             volume_avg = float(df["volume"].tail(20).mean())
 
-            score = 0
 
-            if price > ema50:
+            score = 0            if price > ema:
+                action = "BUY"
                 score += 30
-                trend = "BUY"
-            elif price < ema50:
+            elif price < ema:
+                action = "SELL"
                 score += 30
-                trend = "SELL"
             else:
                 continue
 
-            if trend == "BUY" and rsi < 70:
-                score += 30
 
-            elif trend == "SELL" and rsi > 30:
-                score += 30
-
+            if action == "BUY" and rsi < 70:
+                score += 20
+            elif action == "SELL" and rsi > 30:
+                score += 20
             else:
                 continue
 
-            if trend == "BUY" and macd_value > macd_signal:
-                score += 30
 
-            elif trend == "SELL" and macd_value < macd_signal:
-                score += 30
-
+            if action == "BUY" and macd_value > macd_signal:
+                score += 25
+            elif action == "SELL" and macd_value < macd_signal:
+                score += 25
             else:
                 continue
+
 
             if volume_now > volume_avg:
-                score += 10
+                score += 15
 
-            if score < 60:
+
+            if score < 70:
                 continue
 
-            if trend == "BUY":
-                tp1 = round(price * 1.02, 2)
-                tp2 = round(price * 1.04, 2)
-                tp3 = round(price * 1.06, 2)
-                sl = round(price * 0.98, 2)
+
+            if action == "BUY":
+
+                sl = round(price - (atr_value * 2), 4)
+                tp1 = round(price + (atr_value * 2), 4)
+                tp2 = round(price + (atr_value * 4), 4)
+                tp3 = round(price + (atr_value * 6), 4)
 
             else:
-                tp1 = round(price * 0.98, 2)
-                tp2 = round(price * 0.96, 2)
-                tp3 = round(price * 0.94, 2)
-                sl = round(price * 1.02, 2)
+
+                sl = round(price + (atr_value * 2), 4)
+                tp1 = round(price - (atr_value * 2), 4)
+                tp2 = round(price - (atr_value * 4), 4)
+                tp3 = round(price - (atr_value * 6), 4)
 
 
-            if best is None or score > best["score"]:
-                best = {
-                    "score": score,
+            if best_signal is None or score > best_signal["score"]:
+
+                best_signal = {
                     "symbol": symbol,
-                    "action": trend,
+                    "action": action,
                     "order_type": "LIMIT",
-                    "entry": round(price, 2),
+                    "score": score,
+                    "entry": round(price, 4),
                     "tp1": tp1,
                     "tp2": tp2,
                     "tp3": tp3,
                     "sl": sl,
                     "rsi": round(rsi, 2),
+                    "reason": "EMA + RSI + MACD + Volume + ATR"
                 }
 
 
-        if best:
-            return best
-
-        return {
-            "symbol": "NONE",
-            "action": "WAIT",
-            "order_type": "-",
-            "entry": "-",
-            "tp1": "-",
-            "tp2": "-",
-            "tp3": "-",
-            "sl": "-",
-            "rsi": "-",
-            "score": "-"
-        }
+        except Exception:
+            continue
 
 
-    except Exception as e:
-        return {
-            "symbol": "ERROR",
-            "action": "ERROR",
-            "order_type": "-",
-            "entry": str(e),
-            "tp1": "-",
-            "tp2": "-",
-            "tp3": "-",
-            "sl": "-",
-            "rsi": "-",
-            "score": "-"
-        }
+
+    if best_signal:
+        return best_signal
+
+
+    return {
+        "symbol": "NONE",
+        "action": "WAIT",
+        "order_type": "-",
+        "score": "-",
+        "entry": "-",
+        "tp1": "-",
+        "tp2": "-",
+        "tp3": "-",
+        "sl": "-",
+        "rsi": "-",
+        "reason": "-"
+    }
 
 
 
 def format_signal(signal):
-    return f"""🤖 Ourbit AI Signal
+
+    return f"""🤖 Ourbit AI Pro
 
 💰 ارز: {signal['symbol']}
 📊 وضعیت: {signal['action']}
@@ -182,6 +210,10 @@ def format_signal(signal):
 📈 RSI: {signal['rsi']}
 📊 MACD: ✅
 📊 Volume: ✅
+📐 ATR: ✅
+
+🧠 دلیل:
+{signal['reason']}
 
 ⚠️ معامله را دستی انجام بده.
 """
