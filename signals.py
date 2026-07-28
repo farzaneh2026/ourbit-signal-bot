@@ -88,19 +88,19 @@ def get_signal():
             price = float(df["close"].iloc[-1])
             ema = float(df["ema50"].iloc[-1])
             rsi = float(df["rsi"].iloc[-1])
-entry_status = "⏳ هنوز به نقطه ورود نرسیده"
+            entry_status = "⏳ هنوز به نقطه ورود نرسیده"
 
-if action == "BUY":
-    if price >= price * 0.995:
-        entry_status = "✅ قیمت به محدوده ورود رسید، بررسی کن"
-    else:
-        entry_status = "⏳ صبر کن، هنوز به ورود نرسیده"
+            if action == "BUY":
+            if price >= price * 0.995:
+            entry_status = "✅ قیمت به محدوده ورود رسید، بررسی کن"
+            else:
+            entry_status = "⏳ صبر کن، هنوز به ورود نرسیده"
 
-elif action == "SELL":
-    if price <= price * 1.005:
-        entry_status = "✅ قیمت به محدوده ورود رسید، بررسی کن"
-    else:
-        entry_status = "⏳ صبر کن، هنوز به ورود نرسیده"
+            elif action == "SELL":
+            if price <= price * 1.005:
+            entry_status = "✅ قیمت به محدوده ورود رسید، بررسی کن"
+            else:
+            entry_status = "⏳ صبر کن، هنوز به ورود نرسیده"
             macd_value = float(df["macd"].iloc[-1])
             macd_signal = float(df["macd_signal"].iloc[-1])
 
