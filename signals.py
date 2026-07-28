@@ -129,7 +129,7 @@ def get_signal():
                 score += 15
 
 
-            if score < 80:
+            if score < 70:
                 continue
 
 
