@@ -32,10 +32,10 @@ def get_signal():
 
     best_signal = None
 
-
     for symbol in symbols:
 
         try:
+
             candles = exchange.fetch_ohlcv(
                 symbol,
                 timeframe="30m",
@@ -54,18 +54,15 @@ def get_signal():
                 ]
             )
 
-
             df["ema50"] = ta.trend.EMAIndicator(
                 df["close"],
                 window=50
             ).ema_indicator()
 
-
             df["rsi"] = ta.momentum.RSIIndicator(
                 df["close"],
                 window=14
             ).rsi()
-
 
             macd = ta.trend.MACD(
                 df["close"]
@@ -73,7 +70,6 @@ def get_signal():
 
             df["macd"] = macd.macd()
             df["macd_signal"] = macd.macd_signal()
-
 
             atr = ta.volatility.AverageTrueRange(
                 df["high"],
@@ -90,7 +86,7 @@ def get_signal():
             rsi = float(df["rsi"].iloc[-1])
 
             macd_value = float(df["macd"].iloc[-1])
-            macd_signal = float(df["macd_signal"].iloc[-1])
+            macd_sig = float(df["macd_signal"].iloc[-1])
 
             atr_value = float(df["atr"].iloc[-1])
 
@@ -100,19 +96,18 @@ def get_signal():
 
             score = 0
 
+
             if price > ema:
                 action = "BUY"
                 score += 30
 
-           elif price < ema:
+            elif price < ema:
                 action = "SELL"
                 score += 30
 
             else:
                 continue
-
-
-            if action == "BUY" and rsi < 70:
+                            if action == "BUY" and rsi < 70:
                 score += 20
 
             elif action == "SELL" and rsi > 30:
@@ -121,17 +116,11 @@ def get_signal():
             else:
                 continue
 
-            elif action == "SELL" and rsi > 30:
-                score += 20
 
-            else:
-                continue
-
-
-            if action == "BUY" and macd_value > macd_signal:
+            if action == "BUY" and macd_value > macd_sig:
                 score += 25
 
-            elif action == "SELL" and macd_value < macd_signal:
+            elif action == "SELL" and macd_value < macd_sig:
                 score += 25
 
             else:
@@ -161,14 +150,13 @@ def get_signal():
                 tp3 = round(price - (atr_value * 6), 4)
 
 
-            # وضعیت ورود نسخه 1.3
             entry_status = "⏳ صبر کن"
 
             if action == "BUY":
-                entry_status = "✅ قیمت در محدوده ورود است، بررسی کن"
+                entry_status = "✅ بررسی ورود"
 
             elif action == "SELL":
-                entry_status = "✅ قیمت در محدوده ورود است، بررسی کن"
+                entry_status = "✅ بررسی ورود"
 
 
             if best_signal is None or score > best_signal["score"]:
@@ -191,58 +179,3 @@ def get_signal():
 
         except Exception:
             continue
-
-
-
-    if best_signal:
-        return best_signal
-
-
-    return {
-        "symbol": "NONE",
-        "action": "WAIT",
-        "order_type": "-",
-        "score": "-",
-        "entry": "-",
-        "tp1": "-",
-        "tp2": "-",
-        "tp3": "-",
-        "sl": "-",
-        "rsi": "-",
-        "entry_status": "-",
-        "reason": "-"
-    }
-
-
-
-def format_signal(signal):
-
-    return f"""🤖 Ourbit AI Pro
-
-💰 ارز: {signal['symbol']}
-📊 وضعیت: {signal['action']}
-📌 سفارش: {signal['order_type']}
-
-⭐ قدرت سیگنال: {signal['score']}/100
-
-🎯 ورود: {signal['entry']}
-
-✅ TP1: {signal['tp1']}
-✅ TP2: {signal['tp2']}
-✅ TP3: {signal['tp3']}
-
-🛑 SL: {signal['sl']}
-
-📈 RSI: {signal['rsi']}
-📊 MACD: ✅
-📊 Volume: ✅
-📐 ATR: ✅
-
-📍 وضعیت ورود:
-{signal.get('entry_status','-')}
-
-🧠 دلیل:
-{signal['reason']}
-
-⚠️ معامله را دستی انجام بده.
-"""
