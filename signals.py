@@ -98,29 +98,42 @@ def get_signal():
             volume_avg = float(df["volume"].tail(20).mean())
 
 
-            score = 0         
+            score = 0
+
             if price > ema:
                 action = "BUY"
                 score += 30
-            elif price < ema:
+
+                        elif price < ema:
                 action = "SELL"
                 score += 30
+
             else:
                 continue
 
 
             if action == "BUY" and rsi < 70:
                 score += 20
+
             elif action == "SELL" and rsi > 30:
                 score += 20
+
+            else:
+                continue
+
+            elif action == "SELL" and rsi > 30:
+                score += 20
+
             else:
                 continue
 
 
             if action == "BUY" and macd_value > macd_signal:
                 score += 25
+
             elif action == "SELL" and macd_value < macd_signal:
                 score += 25
+
             else:
                 continue
 
@@ -148,6 +161,16 @@ def get_signal():
                 tp3 = round(price - (atr_value * 6), 4)
 
 
+            # وضعیت ورود نسخه 1.3
+            entry_status = "⏳ صبر کن"
+
+            if action == "BUY":
+                entry_status = "✅ قیمت در محدوده ورود است، بررسی کن"
+
+            elif action == "SELL":
+                entry_status = "✅ قیمت در محدوده ورود است، بررسی کن"
+
+
             if best_signal is None or score > best_signal["score"]:
 
                 best_signal = {
@@ -161,6 +184,7 @@ def get_signal():
                     "tp3": tp3,
                     "sl": sl,
                     "rsi": round(rsi, 2),
+                    "entry_status": entry_status,
                     "reason": "EMA + RSI + MACD + Volume + ATR"
                 }
 
@@ -185,6 +209,7 @@ def get_signal():
         "tp3": "-",
         "sl": "-",
         "rsi": "-",
+        "entry_status": "-",
         "reason": "-"
     }
 
@@ -212,6 +237,9 @@ def format_signal(signal):
 📊 MACD: ✅
 📊 Volume: ✅
 📐 ATR: ✅
+
+📍 وضعیت ورود:
+{signal.get('entry_status','-')}
 
 🧠 دلیل:
 {signal['reason']}
