@@ -195,7 +195,8 @@ def get_signal():
 
             "reason": " + ".join(reason)
 
-        }def format_signal(signal):
+        }
+        def format_signal(signal):
 
     if signal["symbol"] == "NONE":
         return (
