@@ -196,11 +196,11 @@ def get_signal():
             "reason": " + ".join(reason)
 
         }
-        def format_signal(signal):
-
+        
+def format_signal(signal):
     if signal["symbol"] == "NONE":
         return (
-            "❌ در حال حاضر سیگنال مناسبی پیدا نشد.\n"
+            "❌ در حال حاضر سیگنال مناسبی پیدا نشد\n"
             "چند دقیقه دیگر دوباره امتحان کنید."
         )
 
@@ -208,31 +208,25 @@ def get_signal():
 🤖 Ourbit AI Signal v1.3
 
 📊 Symbol: {signal['symbol']}
-
 📈 Signal: {signal['signal']}
 
 💰 Entry: {signal['entry']}
-📍 Current: {signal['current_price']}
-
 🎯 TP1: {signal['tp1']}
 🎯 TP2: {signal['tp2']}
 🎯 TP3: {signal['tp3']}
-
 🛑 Stop Loss: {signal['sl']}
 
-💪 Signal Strength: {signal['strength']}%
+📡 Order: {signal['order_type']}
+🔥 Strength: {signal['strength']}%
 
-📊 RSI: {signal['rsi']}
-📈 EMA50: {signal['ema']}
-📉 MACD: {signal['macd']}
+📉 RSI: {signal['rsi']}
+📊 EMA: {signal['ema']}
+📈 MACD: {signal['macd']}
 📏 ATR: {signal['atr']}
 
-📌 Status:
-{signal['status']}
-
-🧠 Reason:
+📝 Reason:
 {signal['reason']}
-
+"""
 ⚠️ این فقط یک سیگنال تحلیلی است و مسئولیت معامله با کاربر است.
 """
 
