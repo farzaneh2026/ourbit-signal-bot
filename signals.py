@@ -151,17 +151,18 @@ def get_signal():
             if best_signal is None or score > best_signal["score"]:
 
                 best_signal = {
-                    "symbol": symbol,
-                    "action": action,
-                    "order_type": "LIMIT",
-                    "score": score,
-                    "entry": round(price, 4),
-                    "tp1": tp1,
-                    "tp2": tp2,
-                    "tp3": tp3,
-                    "sl": sl,
-                    "rsi": round(rsi, 2),
-                    "reason": "EMA + RSI + MACD + Volume + ATR"
+    "symbol": symbol,
+    "action": action,
+    "order_type": "LIMIT",
+    "score": score,
+    "entry": round(price, 4),
+    "tp1": tp1,
+    "tp2": tp2,
+    "tp3": tp3,
+    "sl": sl,
+    "rsi": round(rsi, 2),
+    "entry_status": "WAIT",
+    "reason": "EMA + RSI + MACD + Volume + ATR"
                 }
 
 
@@ -216,5 +217,7 @@ def format_signal(signal):
 🧠 دلیل:
 {signal['reason']}
 
+📍 وضعیت ورود:
+{signal.get('entry_status','-')}
+
 ⚠️ معامله را دستی انجام بده.
-"""
