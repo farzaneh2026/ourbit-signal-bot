@@ -59,7 +59,7 @@ def main():
     # هر ۱۵ دقیقه یک سیگنال خودکار
     app.job_queue.run_repeating(
         auto_signal,
-        interval=900,
+        interval=1800,
         first=10
     )
 
