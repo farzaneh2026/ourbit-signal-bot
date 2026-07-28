@@ -104,7 +104,7 @@ def get_signal():
                 action = "BUY"
                 score += 30
 
-                        elif price < ema:
+           elif price < ema:
                 action = "SELL"
                 score += 30
 
