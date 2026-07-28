@@ -4,9 +4,8 @@ import ta
 
 exchange = ccxt.kucoin()
 
-def get_signal():
-
-symbols = [  
+def get_signal():    
+    symbols = [ 
     "BTC/USDT",  
     "ETH/USDT",  
     "BNB/USDT",  
