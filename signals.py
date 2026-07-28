@@ -186,11 +186,9 @@ return {
     "sl": "-",  
     "rsi": "-",  
     "reason": "-"  
-}
-
- def format_signal(signal):
-
-return f"""🤖 Ourbit AI Pro
+}    
+def format_signal(signal):    
+    return f"""🤖 Ourbit AI Pro
 
 💰 ارز: {signal['symbol']}
 📊 وضعیت: {signal['action']}
