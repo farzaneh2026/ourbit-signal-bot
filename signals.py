@@ -221,3 +221,4 @@ def format_signal(signal):
 {signal.get('entry_status','-')}
 
 ⚠️ معامله را دستی انجام بده.
+"""
