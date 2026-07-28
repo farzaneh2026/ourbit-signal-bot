@@ -109,7 +109,8 @@ def get_signal():
                 score += 30
 
             else:
-                continue            if action == "BUY" and rsi < 70:
+                continue           
+                if action == "BUY" and rsi < 70:
                 score += 20
 
             elif action == "SELL" and rsi > 30:
