@@ -188,7 +188,7 @@ return {
     "reason": "-"  
 }
 
-def format_signal(signal):
+ def format_signal(signal):
 
 return f"""🤖 Ourbit AI Pro
 
