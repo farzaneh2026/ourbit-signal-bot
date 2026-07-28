@@ -226,18 +226,31 @@ def format_signal(signal):
 
 📝 Reason:
 {signal['reason']}
-"""
+
 ⚠️ این فقط یک سیگنال تحلیلی است و مسئولیت معامله با کاربر است.
 """
 
 
 # در صورت بروز خطا
+
 def get_empty_signal():
-
     return {
-        "symbol": "NONE"
-    }
-
+        "symbol": "NONE",
+        "signal": "-",
+        "entry": "-",
+        "tp1": "-",
+        "tp2": "-",
+        "tp3": "-",
+        "sl": "-",
+        "order_type": "-",
+        "strength": 0,
+        "rsi": 0,
+        "ema": 0,
+        "macd": 0,
+        "atr": 0,
+        "status": "-",
+        "reason": "-"
+}
 
 # اگر در get_signal خطایی رخ داد:
 #
