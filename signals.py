@@ -1,216 +1,251 @@
 import ccxt
 import pandas as pd
 import ta
+from ta.trend import EMAIndicator, MACD
+from ta.momentum import RSIIndicator
+from ta.volatility import AverageTrueRange
 
-exchange = ccxt.kucoin()
+# اتصال به صرافی
+exchange = ccxt.kucoin({
+    "enableRateLimit": True,
+})
+
+# -----------------------------
+# تنظیمات
+# -----------------------------
+SYMBOL = "SOL/USDT"
+TIMEFRAME = "15m"
+LIMIT = 200
+
+ENTRY_TOLERANCE = 0.005   # 0.5 درصد
 
 
 def get_signal():
 
-    symbols = [
-        "BTC/USDT",
-        "ETH/USDT",
-        "BNB/USDT",
-        "SOL/USDT",
-        "XRP/USDT",
-        "DOGE/USDT",
-        "ADA/USDT",
-        "TRX/USDT",
-        "LINK/USDT",
-        "AVAX/USDT",
-        "DOT/USDT",
-        "LTC/USDT",
-        "ATOM/USDT",
-        "UNI/USDT",
-        "ETC/USDT",
-        "FIL/USDT",
-        "APT/USDT",
-        "ARB/USDT",
-        "OP/USDT",
-        "NEAR/USDT"
-    ]
+    try:
 
-    best_signal = None 
+        ohlcv = exchange.fetch_ohlcv(
+            SYMBOL,
+            timeframe=TIMEFRAME,
+            limit=LIMIT
+        )
 
+        df = pd.DataFrame(
+            ohlcv,
+            columns=[
+                "time",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume"
+            ]
+        )
 
-for symbol in symbols:  
+        # -----------------------------
+        # اندیکاتورها
+        # -----------------------------
 
-    try:  
-        candles = exchange.fetch_ohlcv(  
-            symbol,  
-            timeframe="30m",  
-            limit=100  
-        )  
+        df["ema50"] = EMAIndicator(
+            close=df["close"],
+            window=50
+        ).ema_indicator()
 
-        df = pd.DataFrame(  
-            candles,  
-            columns=[  
-                "time",  
-                "open",  
-                "high",  
-                "low",  
-                "close",  
-                "volume"  
-            ]  
-        )  
+        df["rsi"] = RSIIndicator(
+            close=df["close"],
+            window=14
+        ).rsi()
 
+        macd = MACD(df["close"])
 
-        df["ema50"] = ta.trend.EMAIndicator(  
-            df["close"],  
-            window=50  
-        ).ema_indicator()  
+        df["macd"] = macd.macd()
+        df["macd_signal"] = macd.macd_signal()
 
+        atr = AverageTrueRange(
+            df["high"],
+            df["low"],
+            df["close"]
+        )
 
-        df["rsi"] = ta.momentum.RSIIndicator(  
-            df["close"],  
-            window=14  
-        ).rsi()  
+        df["atr"] = atr.average_true_range()
 
+        last = df.iloc[-1]
 
-        macd = ta.trend.MACD(  
-            df["close"]  
-        )  
+        price = float(last["close"])
+        ema = float(last["ema50"])
+        rsi = float(last["rsi"])
+        macd_value = float(last["macd"])
+        macd_signal = float(last["macd_signal"])
+        atr = float(last["atr"])
+        volume = float(last["volume"])
 
-        df["macd"] = macd.macd()  
-        df["macd_signal"] = macd.macd_signal()  
+        # -----------------------------
+        # امتیازدهی
+        # -----------------------------
 
+        score = 0
+        reason = []
 
-        atr = ta.volatility.AverageTrueRange(  
-            df["high"],  
-            df["low"],  
-            df["close"],  
-            window=14  
-        )  
+        if price > ema:
+            score += 25
+            reason.append("EMA")
 
-        df["atr"] = atr.average_true_range()  
+        if rsi > 55:
+            score += 20
+            reason.append("RSI")
 
+        if macd_value > macd_signal:
+            score += 30
+            reason.append("MACD")
 
-        price = float(df["close"].iloc[-1])  
-        ema = float(df["ema50"].iloc[-1])  
-        rsi = float(df["rsi"].iloc[-1])  
+        avg_volume = df["volume"].tail(20).mean()
 
-        macd_value = float(df["macd"].iloc[-1])  
-        macd_signal = float(df["macd_signal"].iloc[-1])  
+        if volume > avg_volume:
+            score += 15
+            reason.append("Volume")
 
-        atr_value = float(df["atr"].iloc[-1])  
+        if atr > df["atr"].tail(20).mean():
+            score += 10
+            reason.append("ATR")
 
-        volume_now = float(df["volume"].iloc[-1])  
-        volume_avg = float(df["volume"].tail(20).mean())  
+        strength = min(score, 100)
+        # -----------------------------
+        # تعیین جهت معامله
+        # -----------------------------
 
+        if strength >= 60:
+            signal = "BUY"
+        else:
+            signal = "SELL"
 
-        score = 0           
-        if price > ema:  
-            action = "BUY"  
-            score += 30  
-        elif price < ema:  
-            action = "SELL"  
-            score += 30  
-        else:  
-            continue  
+        entry = price
 
+        # -----------------------------
+        # محاسبه TP و SL
+        # -----------------------------
 
-        if action == "BUY" and rsi < 70:  
-            score += 20  
-        elif action == "SELL" and rsi > 30:  
-            score += 20  
-        else:  
-            continue  
+        if signal == "BUY":
 
+            tp1 = round(entry * 1.02, 4)
+            tp2 = round(entry * 1.04, 4)
+            tp3 = round(entry * 1.06, 4)
 
-        if action == "BUY" and macd_value > macd_signal:  
-            score += 25  
-        elif action == "SELL" and macd_value < macd_signal:  
-            score += 25  
-        else:  
-            continue  
+            sl = round(entry * 0.98, 4)
 
+        else:
 
-        if volume_now > volume_avg:  
-            score += 15  
+            tp1 = round(entry * 0.98, 4)
+            tp2 = round(entry * 0.96, 4)
+            tp3 = round(entry * 0.94, 4)
 
+            sl = round(entry * 1.02, 4)
 
-        if score < 70:  
-            continue  
+        # -----------------------------
+        # بررسی فاصله قیمت از ورود
+        # -----------------------------
 
+        current_price = float(
+            exchange.fetch_ticker(SYMBOL)["last"]
+        )
 
-        if action == "BUY":  
+        diff = abs(current_price - entry) / entry
 
-            sl = round(price - (atr_value * 2), 4)  
-            tp1 = round(price + (atr_value * 2), 4)  
-            tp2 = round(price + (atr_value * 4), 4)  
-            tp3 = round(price + (atr_value * 6), 4)  
+        if diff <= ENTRY_TOLERANCE:
+            status = "🟢 READY TO ENTER"
 
-        else:  
+        elif diff <= ENTRY_TOLERANCE * 2:
+            status = "🟡 WAIT"
 
-            sl = round(price + (atr_value * 2), 4)  
-            tp1 = round(price - (atr_value * 2), 4)  
-            tp2 = round(price - (atr_value * 4), 4)  
-            tp3 = round(price - (atr_value * 6), 4)  
+        else:
+            status = "🔴 INVALID"
 
+        # -----------------------------
+        # آماده‌سازی خروجی
+        # -----------------------------
 
-        if best_signal is None or score > best_signal["score"]:  
+        return {
 
-            best_signal = {  
-                "symbol": symbol,  
-                "action": action,  
-                "order_type": "LIMIT",  
-                "score": score,  
-                "entry": round(price, 4),  
-                "tp1": tp1,  
-                "tp2": tp2,  
-                "tp3": tp3,  
-                "sl": sl,  
-                "rsi": round(rsi, 2),  
-                "reason": "EMA + RSI + MACD + Volume + ATR"  
-            }  
+            "symbol": SYMBOL,
 
+            "signal": signal,
 
-    except Exception:  
-        continue  
+            "entry": round(entry, 4),
 
+            "current_price": round(current_price, 4),
 
+            "tp1": tp1,
 
-if best_signal:  
-    return best_signal  
+            "tp2": tp2,
 
+            "tp3": tp3,
 
-return {  
-    "symbol": "NONE",  
-    "action": "WAIT",  
-    "order_type": "-",  
-    "score": "-",  
-    "entry": "-",  
-    "tp1": "-",  
-    "tp2": "-",  
-    "tp3": "-",  
-    "sl": "-",  
-    "rsi": "-",  
-    "reason": "-"  
-}    
-def format_signal(signal):    
-    return f"""🤖 Ourbit AI Pro
+            "sl": sl,
 
-💰 ارز: {signal['symbol']}
-📊 وضعیت: {signal['action']}
-📌 سفارش: {signal['order_type']}
+            "strength": strength,
 
-⭐ قدرت سیگنال: {signal['score']}/100
+            "status": status,
 
-🎯 ورود: {signal['entry']}
+            "rsi": round(rsi, 2),
 
-✅ TP1: {signal['tp1']}
-✅ TP2: {signal['tp2']}
-✅ TP3: {signal['tp3']}
+            "ema": round(ema, 4),
 
-🛑 SL: {signal['sl']}
+            "macd": round(macd_value, 4),
 
-📈 RSI: {signal['rsi']}
-📊 MACD: ✅
-📊 Volume: ✅
-📐 ATR: ✅
+            "atr": round(atr, 4),
 
-🧠 دلیل:
+            "reason": " + ".join(reason)
+
+        }def format_signal(signal):
+
+    if signal["symbol"] == "NONE":
+        return (
+            "❌ در حال حاضر سیگنال مناسبی پیدا نشد.\n"
+            "چند دقیقه دیگر دوباره امتحان کنید."
+        )
+
+    return f"""
+🤖 Ourbit AI Signal v1.3
+
+📊 Symbol: {signal['symbol']}
+
+📈 Signal: {signal['signal']}
+
+💰 Entry: {signal['entry']}
+📍 Current: {signal['current_price']}
+
+🎯 TP1: {signal['tp1']}
+🎯 TP2: {signal['tp2']}
+🎯 TP3: {signal['tp3']}
+
+🛑 Stop Loss: {signal['sl']}
+
+💪 Signal Strength: {signal['strength']}%
+
+📊 RSI: {signal['rsi']}
+📈 EMA50: {signal['ema']}
+📉 MACD: {signal['macd']}
+📏 ATR: {signal['atr']}
+
+📌 Status:
+{signal['status']}
+
+🧠 Reason:
 {signal['reason']}
 
-⚠️ معامله را دستی انجام بده.
+⚠️ این فقط یک سیگنال تحلیلی است و مسئولیت معامله با کاربر است.
 """
+
+
+# در صورت بروز خطا
+def get_empty_signal():
+
+    return {
+        "symbol": "NONE"
+    }
+
+
+# اگر در get_signal خطایی رخ داد:
+#
+# except Exception as e:
+#     print(e)
+#     return get_empty_signal()
