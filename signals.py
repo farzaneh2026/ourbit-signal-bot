@@ -38,7 +38,7 @@ def get_signal():
         try:
             candles = exchange.fetch_ohlcv(
                 symbol,
-                timeframe="15m",
+                timeframe="30m",
                 limit=100
             )
 
