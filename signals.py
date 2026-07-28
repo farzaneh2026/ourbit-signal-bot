@@ -4,31 +4,33 @@ import ta
 
 exchange = ccxt.kucoin()
 
-def get_signal():    
-    symbols = [ 
-    "BTC/USDT",  
-    "ETH/USDT",  
-    "BNB/USDT",  
-    "SOL/USDT",  
-    "XRP/USDT",  
-    "DOGE/USDT",  
-    "ADA/USDT",  
-    "TRX/USDT",  
-    "LINK/USDT",  
-    "AVAX/USDT",  
-    "DOT/USDT",  
-    "LTC/USDT",  
-    "ATOM/USDT",  
-    "UNI/USDT",  
-    "ETC/USDT",  
-    "FIL/USDT",  
-    "APT/USDT",  
-    "ARB/USDT",  
-    "OP/USDT",  
-    "NEAR/USDT"  
-]  
 
-best_signal = None  
+def get_signal():
+
+    symbols = [
+        "BTC/USDT",
+        "ETH/USDT",
+        "BNB/USDT",
+        "SOL/USDT",
+        "XRP/USDT",
+        "DOGE/USDT",
+        "ADA/USDT",
+        "TRX/USDT",
+        "LINK/USDT",
+        "AVAX/USDT",
+        "DOT/USDT",
+        "LTC/USDT",
+        "ATOM/USDT",
+        "UNI/USDT",
+        "ETC/USDT",
+        "FIL/USDT",
+        "APT/USDT",
+        "ARB/USDT",
+        "OP/USDT",
+        "NEAR/USDT"
+    ]
+
+    best_signal = None 
 
 
 for symbol in symbols:  
