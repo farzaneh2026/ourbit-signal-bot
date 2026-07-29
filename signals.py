@@ -163,7 +163,7 @@ def get_signal():
         # آماده‌سازی خروجی
         # -----------------------------
 
-                return {
+                     return {
             "symbol": SYMBOL,
             "signal": signal,
             "entry": round(entry, 4),
@@ -172,6 +172,7 @@ def get_signal():
             "tp2": tp2,
             "tp3": tp3,
             "sl": sl,
+            "order_type": "MARKET",
             "strength": strength,
             "status": status,
             "rsi": round(rsi, 2),
@@ -217,10 +218,7 @@ def format_signal(signal):
 {signal['reason']}
 
 ⚠️ این فقط یک سیگنال تحلیلی است و مسئولیت معامله با کاربر است.
-"""
-
-
-# در صورت بروز خطا
+"""   
 
 def get_empty_signal():
     return {
