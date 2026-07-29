@@ -163,40 +163,29 @@ def get_signal():
         # آماده‌سازی خروجی
         # -----------------------------
 
-        return {
-
+                return {
             "symbol": SYMBOL,
-
             "signal": signal,
-
             "entry": round(entry, 4),
-
             "current_price": round(current_price, 4),
-
             "tp1": tp1,
-
             "tp2": tp2,
-
             "tp3": tp3,
-
             "sl": sl,
-
             "strength": strength,
-
             "status": status,
-
             "rsi": round(rsi, 2),
-
             "ema": round(ema, 4),
-
             "macd": round(macd_value, 4),
-
             "atr": round(atr, 4),
-
             "reason": " + ".join(reason)
-
         }
-        
+
+    except Exception as e:
+        print(e)
+        return get_empty_signal()
+
+
 def format_signal(signal):
     if signal["symbol"] == "NONE":
         return (
