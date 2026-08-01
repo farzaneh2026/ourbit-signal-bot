@@ -1,4 +1,0 @@
-ccxt
-pandas
-ta
-python-telegram-bot[job-queue]==21.6
