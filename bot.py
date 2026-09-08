@@ -5,6 +5,7 @@ import os
 import re
 from pathlib import Path
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 from parser import parse_signal, Signal
 from ourbit import OurbitClient, OurbitError, _find_records, _as_float
 from config import *
@@ -13,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(
 log = logging.getLogger('otis-copytrader')
 
 seen = set()
-client = TelegramClient('otis_copytrader', TG_API_ID, TG_API_HASH)
+client = TelegramClient(StringSession(TG_SESSION), TG_API_ID, TG_API_HASH)
 exchange = OurbitClient()
 state_path = Path(STATE_FILE)
 managed = {}
@@ -334,7 +335,7 @@ async def main():
     if not TG_API_ID or not TG_API_HASH:
         raise SystemExit('Set TG_API_ID and TG_API_HASH in Railway variables.')
     if not TG_SESSION:
-        log.warning('TG_SESSION is empty. Generate a Telethon user session before Railway deployment.')
+        raise SystemExit('TG_SESSION is not set. Generate a Telethon StringSession and add it to Railway variables.')
     log.info('Otis CopyTrader v2 starting | source=%s | DRY_RUN=%s | Ourbit=%s', TG_SOURCE, DRY_RUN, OURBIT_API_BASE)
     await client.start(bot_token=None)
     me = await client.get_me()

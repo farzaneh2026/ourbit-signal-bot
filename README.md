@@ -23,7 +23,7 @@ The official Ourbit V1 collection confirms the futures endpoints for contract de
 - `TG_API_ID`
 - `TG_API_HASH`
 - `TG_SESSION`
-- `TG_SOURCE=otis_ai_bot`
+- `TG_SOURCE=-1003980416205`
 - `OURBIT_API_KEY`
 - `OURBIT_API_SECRET`
 
@@ -34,3 +34,29 @@ Recommended first test:
 - `POSITION_MODE=2`
 
 Never put API Secret or Telegram session in the source code or ZIP.
+
+
+## Telegram / Railway deployment
+
+This version uses Telethon `StringSession` directly from the `TG_SESSION`
+Railway environment variable. Railway therefore does not need a local
+`.session` file and should not ask for a phone number at runtime.
+
+Generate the StringSession once on a trusted local machine with:
+
+```bash
+python create_session.py
+```
+
+Then put the printed value in Railway as `TG_SESSION`.
+
+Required Telegram variables:
+- `TG_API_ID`
+- `TG_API_HASH`
+- `TG_SESSION`
+- `TG_SOURCE=-1003980416205`
+
+Security:
+- Never commit `.env`, Telegram StringSession values, Telegram session files,
+  `OURBIT_API_SECRET`, API keys, or other credentials to GitHub.
+- `DRY_RUN=true` remains the safe default and must stay enabled during testing.

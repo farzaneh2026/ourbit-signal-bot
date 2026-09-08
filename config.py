@@ -3,7 +3,7 @@ import os
 TG_API_ID = int(os.getenv('TG_API_ID', '0'))
 TG_API_HASH = os.getenv('TG_API_HASH', '')
 TG_SESSION = os.getenv('TG_SESSION', '')
-TG_SOURCE = os.getenv('TG_SOURCE', 'otis_ai_bot')
+TG_SOURCE = os.getenv('TG_SOURCE', '-1003980416205')
 TG_NOTIFY_CHAT_ID = os.getenv('TG_NOTIFY_CHAT_ID', '')
 
 OURBIT_API_BASE = os.getenv('OURBIT_API_BASE', 'https://contract.ourbit.com')
