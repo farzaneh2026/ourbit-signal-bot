@@ -310,7 +310,7 @@ async def manager_loop():
         await asyncio.sleep(max(1, POLL_SECONDS))
 
 
-@client.on(events.NewMessage(chats=TG_SOURCE))
+@client.on(events.NewMessage(chats=int(TG_SOURCE)))
 async def on_message(event):
     text = event.raw_text or ''
     sig = parse_signal(text, event.id)
