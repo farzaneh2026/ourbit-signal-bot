@@ -349,6 +349,20 @@ async def main():
     await client.start(bot_token=None)
     me = await client.get_me()
     log.info('Telegram account connected: %s', getattr(me, 'username', None) or getattr(me, 'id', None))
+
+    # Safe private-API authentication test: read-only USDT futures asset endpoint.
+    # This does NOT place, cancel, or modify any order and remains safe with DRY_RUN=true.
+    try:
+        private = exchange.asset_usdt()
+        log.info('Ourbit private API authentication: OK | USDT asset endpoint responded successfully')
+        if isinstance(private, dict):
+            data = private.get('data', private)
+            log.info('Ourbit private API response summary: type=%s keys=%s', type(data).__name__, list(data.keys())[:12] if isinstance(data, dict) else 'n/a')
+        else:
+            log.info('Ourbit private API response summary: type=%s', type(private).__name__)
+    except Exception as e:
+        log.error('Ourbit private API authentication: FAILED | %s', e)
+
     manager = asyncio.create_task(manager_loop())
     try:
         await client.run_until_disconnected()
