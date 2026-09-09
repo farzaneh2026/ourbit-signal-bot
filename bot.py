@@ -337,6 +337,13 @@ async def main():
     if not TG_SESSION:
         raise SystemExit('TG_SESSION is not set. Generate a Telethon StringSession and add it to Railway variables.')
     log.info('Otis CopyTrader v2 starting | source=%s | DRY_RUN=%s | Ourbit=%s', TG_SOURCE, DRY_RUN, OURBIT_API_BASE)
+    # Non-fatal API connectivity check. The bot can still connect to Telegram if
+    # Ourbit DNS/network is temporarily unavailable; the exact API error is logged.
+    try:
+        api_health = exchange.health_check()
+        log.info('Ourbit V1 API health check OK: %s', api_health)
+    except Exception as e:
+        log.warning('Ourbit V1 API health check failed (bot will keep running): %s', e)
     await client.start(bot_token=None)
     me = await client.get_me()
     log.info('Telegram account connected: %s', getattr(me, 'username', None) or getattr(me, 'id', None))

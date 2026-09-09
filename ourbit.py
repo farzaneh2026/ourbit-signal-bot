@@ -8,7 +8,7 @@ from typing import Any
 import requests
 
 from config import (
-    OURBIT_API_BASE, OURBIT_API_KEY, OURBIT_API_SECRET,
+    OURBIT_API_BASE, OURBIT_API_FALLBACK_BASES, OURBIT_API_KEY, OURBIT_API_SECRET,
     REQUEST_TIMEOUT, MARGIN_MODE, POSITION_MODE,
 )
 
@@ -47,6 +47,8 @@ def _find_records(obj):
 class OurbitClient:
     def __init__(self):
         self.base = OURBIT_API_BASE.rstrip('/')
+        # Optional, explicitly configured alternatives only. No unverified fallback is used by default.
+        self.fallback_bases = [b for b in OURBIT_API_FALLBACK_BASES if b and b != self.base]
         self.key = OURBIT_API_KEY
         self.secret = OURBIT_API_SECRET
         self.s = requests.Session()
@@ -79,18 +81,39 @@ class OurbitClient:
         # Match the V1 Postman collection convention: key=value pairs in request order.
         return '&'.join(f'{k}={v}' for k, v in params.items() if v is not None)
 
+    def _request(self, method, path, *, params=None, payload=None, private=False):
+        bases = [self.base] + self.fallback_bases
+        last_error = None
+        for idx, base in enumerate(bases):
+            url = base + path
+            try:
+                if method == 'GET':
+                    headers = self._signed_headers('GET', query_string=self._query_string(params or {})) if private else {}
+                    r = self.s.get(url, params=params or {}, headers=headers, timeout=REQUEST_TIMEOUT)
+                else:
+                    payload = payload if payload is not None else {}
+                    headers = self._signed_headers('POST', payload) if private else {'Content-Type': 'application/json'}
+                    body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
+                    r = self.s.post(url, data=body, headers=headers, timeout=REQUEST_TIMEOUT)
+                return self._json(r)
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                last_error = exc
+                if idx + 1 < len(bases):
+                    continue
+                kind = 'DNS/connection' if isinstance(exc, requests.exceptions.ConnectionError) else 'timeout'
+                raise OurbitError(
+                    f'Ourbit {kind} error calling {url}: {exc}. '
+                    f'Check Railway network/DNS and OURBIT_API_BASE.'
+                ) from exc
+            except requests.exceptions.RequestException as exc:
+                raise OurbitError(f'Ourbit HTTP request failed for {url}: {exc}') from exc
+        raise OurbitError(f'Ourbit request failed: {last_error}')
+
     def get(self, path, params=None, private=False):
-        params = params or {}
-        headers = self._signed_headers('GET', query_string=self._query_string(params)) if private else {}
-        r = self.s.get(self.base + path, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
-        return self._json(r)
+        return self._request('GET', path, params=params or {}, private=private)
 
     def post(self, path, payload=None, private=True):
-        payload = payload if payload is not None else {}
-        headers = self._signed_headers('POST', payload) if private else {'Content-Type': 'application/json'}
-        body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
-        r = self.s.post(self.base + path, data=body, headers=headers, timeout=REQUEST_TIMEOUT)
-        return self._json(r)
+        return self._request('POST', path, payload=payload or {}, private=private)
 
     @staticmethod
     def _json(r):
@@ -110,6 +133,9 @@ class OurbitClient:
 
     def ping(self):
         return self.get('/api/v1/contract/ping')
+
+    def health_check(self):
+        return self.ping()
 
     def contract_detail(self, symbol=None):
         params = {'symbol': symbol} if symbol else {}
