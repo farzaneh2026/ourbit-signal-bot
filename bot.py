@@ -343,6 +343,7 @@ async def main():
         if not health.get('api'):
             log.warning('Ourbit DNS/API is not reachable yet; Telegram will keep running safely.')
             log.info('Ourbit DNS diagnostic (no base switching): %s', exchange.diagnostic_dns())
+            log.info('Ourbit V1 HTTP diagnostic (no base switching, no trading): %s', exchange.diagnostic_http_bases())
     except Exception as e:
         log.warning('Ourbit startup diagnostic failed (non-fatal): %s', e)
     await client.start(bot_token=None)

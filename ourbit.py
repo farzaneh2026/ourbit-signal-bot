@@ -164,6 +164,34 @@ class OurbitClient:
                 out[host] = {'ok': False, 'error': str(e)}
         return out
 
+    def diagnostic_http_bases(self, symbol='BTC_USDT'):
+        """Test public V1 paths on alternate Ourbit hosts; never changes self.base and never trades."""
+        hosts = ['api.ourbit.com', 'futures.ourbit.com']
+        paths = [
+            '/api/v1/contract/ping',
+            '/api/v1/contract/detail',
+        ]
+        out = {}
+        for host in hosts:
+            base = f'https://{host}'
+            out[host] = {}
+            for path in paths:
+                url = base + path
+                params = {'symbol': symbol} if path.endswith('/detail') else None
+                try:
+                    r = self.s.get(url, params=params, timeout=REQUEST_TIMEOUT)
+                    content_type = r.headers.get('content-type', '')
+                    body = r.text[:500]
+                    out[host][path] = {
+                        'ok': 200 <= r.status_code < 400,
+                        'status': r.status_code,
+                        'content_type': content_type,
+                        'body': body,
+                    }
+                except requests.exceptions.RequestException as e:
+                    out[host][path] = {'ok': False, 'error': str(e)}
+        return out
+
     def contract_detail(self, symbol=None):
         params = {'symbol': symbol} if symbol else {}
         return self.get('/api/v1/contract/detail', params)
