@@ -3,12 +3,14 @@ import hmac
 import json
 import time
 import uuid
+import socket
+from urllib.parse import urlparse
 from decimal import Decimal, ROUND_UP
 from typing import Any
 import requests
 
 from config import (
-    OURBIT_API_BASE, OURBIT_API_FALLBACK_BASES, OURBIT_API_KEY, OURBIT_API_SECRET,
+    OURBIT_API_BASE, OURBIT_API_KEY, OURBIT_API_SECRET,
     REQUEST_TIMEOUT, MARGIN_MODE, POSITION_MODE,
 )
 
@@ -47,12 +49,11 @@ def _find_records(obj):
 class OurbitClient:
     def __init__(self):
         self.base = OURBIT_API_BASE.rstrip('/')
-        # Optional, explicitly configured alternatives only. No unverified fallback is used by default.
-        self.fallback_bases = [b for b in OURBIT_API_FALLBACK_BASES if b and b != self.base]
         self.key = OURBIT_API_KEY
         self.secret = OURBIT_API_SECRET
         self.s = requests.Session()
         self.s.headers.update({'User-Agent': 'otis-copytrader/2.0'})
+        self._last_health = None
 
     def _require_keys(self):
         if not self.key or not self.secret:
@@ -82,38 +83,36 @@ class OurbitClient:
         return '&'.join(f'{k}={v}' for k, v in params.items() if v is not None)
 
     def _request(self, method, path, *, params=None, payload=None, private=False):
-        bases = [self.base] + self.fallback_bases
-        last_error = None
-        for idx, base in enumerate(bases):
-            url = base + path
+        url = self.base + path
+        params = params or {}
+        try:
+            if method.upper() == 'GET':
+                headers = self._signed_headers('GET', query_string=self._query_string(params)) if private else {}
+                r = self.s.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+            else:
+                payload = payload if payload is not None else {}
+                headers = self._signed_headers('POST', payload) if private else {'Content-Type': 'application/json'}
+                body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
+                r = self.s.post(url, data=body, headers=headers, timeout=REQUEST_TIMEOUT)
+        except requests.exceptions.Timeout as e:
+            raise OurbitError(f'Ourbit timeout calling {url}: {e}') from e
+        except requests.exceptions.ConnectionError as e:
+            host = urlparse(url).hostname or self.base
+            dns_hint = ''
             try:
-                if method == 'GET':
-                    headers = self._signed_headers('GET', query_string=self._query_string(params or {})) if private else {}
-                    r = self.s.get(url, params=params or {}, headers=headers, timeout=REQUEST_TIMEOUT)
-                else:
-                    payload = payload if payload is not None else {}
-                    headers = self._signed_headers('POST', payload) if private else {'Content-Type': 'application/json'}
-                    body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
-                    r = self.s.post(url, data=body, headers=headers, timeout=REQUEST_TIMEOUT)
-                return self._json(r)
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
-                last_error = exc
-                if idx + 1 < len(bases):
-                    continue
-                kind = 'DNS/connection' if isinstance(exc, requests.exceptions.ConnectionError) else 'timeout'
-                raise OurbitError(
-                    f'Ourbit {kind} error calling {url}: {exc}. '
-                    f'Check Railway network/DNS and OURBIT_API_BASE.'
-                ) from exc
-            except requests.exceptions.RequestException as exc:
-                raise OurbitError(f'Ourbit HTTP request failed for {url}: {exc}') from exc
-        raise OurbitError(f'Ourbit request failed: {last_error}')
+                socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+            except socket.gaierror as de:
+                dns_hint = f' DNS lookup also failed for {host}: {de}.'
+            raise OurbitError(f'Ourbit DNS/connection error calling {url}: {e}.{dns_hint} Check Railway network/DNS and OURBIT_API_BASE.') from e
+        except requests.exceptions.RequestException as e:
+            raise OurbitError(f'Ourbit request error calling {url}: {e}') from e
+        return self._json(r)
 
     def get(self, path, params=None, private=False):
-        return self._request('GET', path, params=params or {}, private=private)
+        return self._request('GET', path, params=params, private=private)
 
     def post(self, path, payload=None, private=True):
-        return self._request('POST', path, payload=payload or {}, private=private)
+        return self._request('POST', path, payload=payload, private=private)
 
     @staticmethod
     def _json(r):
@@ -135,7 +134,35 @@ class OurbitClient:
         return self.get('/api/v1/contract/ping')
 
     def health_check(self):
-        return self.ping()
+        """Check official V1 contract API and report DNS status without raising."""
+        host = urlparse(self.base).hostname or ''
+        result = {'base': self.base, 'host': host, 'dns': False, 'api': False, 'error': None}
+        try:
+            socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+            result['dns'] = True
+        except socket.gaierror as e:
+            result['error'] = f'DNS lookup failed: {e}'
+            self._last_health = result
+            return result
+        try:
+            self.ping()
+            result['api'] = True
+        except OurbitError as e:
+            result['error'] = str(e)
+        self._last_health = result
+        return result
+
+    def diagnostic_dns(self, hosts=None):
+        """Resolve candidate Ourbit hosts for diagnosis only; never switches API base."""
+        hosts = hosts or ['contract.ourbit.com', 'api.ourbit.com', 'futures.ourbit.com']
+        out = {}
+        for host in hosts:
+            try:
+                addrs = sorted({x[4][0] for x in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
+                out[host] = {'ok': True, 'addresses': addrs}
+            except socket.gaierror as e:
+                out[host] = {'ok': False, 'error': str(e)}
+        return out
 
     def contract_detail(self, symbol=None):
         params = {'symbol': symbol} if symbol else {}

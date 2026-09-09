@@ -7,7 +7,6 @@ TG_SOURCE = os.getenv('TG_SOURCE', '-1003980416205')
 TG_NOTIFY_CHAT_ID = os.getenv('TG_NOTIFY_CHAT_ID', '')
 
 OURBIT_API_BASE = os.getenv('OURBIT_API_BASE', 'https://contract.ourbit.com')
-OURBIT_API_FALLBACK_BASES = [x.strip().rstrip('/') for x in os.getenv('OURBIT_API_FALLBACK_BASES', '').split(',') if x.strip()]
 OURBIT_API_KEY = os.getenv('OURBIT_API_KEY', '')
 OURBIT_API_SECRET = os.getenv('OURBIT_API_SECRET', '')
 
