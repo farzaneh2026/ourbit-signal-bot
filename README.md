@@ -22,7 +22,7 @@ Separate Telegram-to-Ourbit futures copy trader.
 - `DRY_RUN=true` is the safe default.
 
 ## Important
-The current default futures V1 base remains `https://contract.ourbit.com` because that is the V1 contract base supported by the project. Do not change it to the generic `api.ourbit.com` unless Ourbit documents a compatible V1 contract replacement.
+The current default futures V1 base remains `https://futures.ourbit.com` because that is the V1 contract base supported by the project. Do not change it to the generic `api.ourbit.com` unless Ourbit documents a compatible V1 contract replacement.
 
 Do not switch `DRY_RUN=false` until Telegram parsing, public Ourbit endpoints, and private authentication have been verified.
 
