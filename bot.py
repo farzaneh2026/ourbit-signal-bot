@@ -350,16 +350,17 @@ async def main():
     me = await client.get_me()
     log.info('Telegram account connected: %s', getattr(me, 'username', None) or getattr(me, 'id', None))
 
-    # Safe private-API authentication test: read-only USDT futures asset endpoint.
-    # This does NOT place, cancel, or modify any order and remains safe with DRY_RUN=true.
+    # Read-only Futures API authentication test. Do not query the Asset endpoint here:
+    # Ourbit's current personal API documentation lists Futures Order History under
+    # read-only permissions, while the Asset endpoint may require a separate permission.
     try:
-        private = exchange.asset_usdt()
-        log.info('Ourbit private API authentication: OK | USDT asset endpoint responded successfully')
-        if isinstance(private, dict):
-            data = private.get('data', private)
-            log.info('Ourbit private API response summary: type=%s keys=%s', type(data).__name__, list(data.keys())[:12] if isinstance(data, dict) else 'n/a')
+        if OURBIT_API_KEY and OURBIT_API_SECRET:
+            data = exchange.futures_order_history('BTC_USDT')
+            if isinstance(data, dict) and data.get('success') is False:
+                raise OurbitError(str(data))
+            log.info('Ourbit private API authentication: OK | Futures order-history endpoint responded successfully')
         else:
-            log.info('Ourbit private API response summary: type=%s', type(private).__name__)
+            log.error('Ourbit private API authentication: FAILED | OURBIT_API_KEY / OURBIT_API_SECRET are not configured')
     except Exception as e:
         log.error('Ourbit private API authentication: FAILED | %s', e)
 

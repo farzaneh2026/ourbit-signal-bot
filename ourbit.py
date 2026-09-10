@@ -219,6 +219,15 @@ class OurbitClient:
     def asset_usdt(self):
         return self.get('/api/v1/private/account/asset/USDT', private=True)
 
+    def futures_order_history(self, symbol='BTC_USDT'):
+        # Read-only Futures endpoint covered by the API key's read permissions.
+        # A symbol is supplied so the request matches the official V1 collection.
+        return self.get('/api/v1/private/order/list/history_orders', {
+            'page_num': 1,
+            'page_size': 20,
+            'symbol': symbol,
+        }, private=True)
+
     def change_leverage(self, symbol, leverage):
         return self.post('/api/v1/private/position/change_leverage', {
             'openType': MARGIN_MODE,
