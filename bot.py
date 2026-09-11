@@ -72,12 +72,25 @@ def validate_levels(sig: Signal):
     if sig.stop_loss is None or not sig.targets:
         raise ValueError('Signal must contain SL and at least one target')
     targets = [x for x in sig.targets if x is not None]
+    if not targets:
+        raise ValueError('Signal must contain at least one numeric target')
+
+    # The direction geometry is evaluated from the actual signal values.
+    # Numeric entries, when supplied, are also checked; a market entry is None
+    # and therefore cannot be compared until the live price is known.
+    numeric_entries = [x for x in sig.entries if x is not None]
     if sig.direction == 'LONG':
         if sig.stop_loss >= min(targets):
             raise ValueError('Invalid LONG SL/TP geometry')
+        if numeric_entries:
+            if not (sig.stop_loss < min(numeric_entries) and max(numeric_entries) < min(targets)):
+                raise ValueError('Invalid LONG Entry/SL/TP geometry')
     else:
         if sig.stop_loss <= max(targets):
             raise ValueError('Invalid SHORT SL/TP geometry')
+        if numeric_entries:
+            if not (max(targets) < max(numeric_entries) and min(numeric_entries) < sig.stop_loss):
+                raise ValueError('Invalid SHORT Entry/SL/TP geometry')
 
 
 async def notify(text):
@@ -180,10 +193,11 @@ async def execute(sig: Signal):
     if DRY_RUN:
         # Public contract + ticker checks are useful even in dry-run, but no private trade.
         live = current_price(sig.symbol)
-        margin = (balance_usdt() * MAX_MARGIN_PCT_PER_ENTRY) if OURBIT_API_KEY and OURBIT_API_SECRET else None
-        if margin:
-            qty, notional, _ = calc_volume(live, lev, equity=balance_usdt(), contract=contract)
-            log.info('DRY RUN sizing %s: live=%s qty=%s notional=%s max_margin=%s', sig.symbol, live, qty, notional, margin)
+        # DRY_RUN must remain independent of private asset permission.
+        # The previous code queried the USDT asset endpoint here whenever API
+        # keys existed, causing a harmless dry-run to fail with Ourbit code 701.
+        if OURBIT_API_KEY and OURBIT_API_SECRET:
+            log.info('DRY RUN public check: %s live=%s contract=%s | private balance check skipped', sig.symbol, live, meta)
         else:
             log.info('DRY RUN public check: %s live=%s contract=%s', sig.symbol, live, meta)
         return
@@ -319,6 +333,7 @@ async def on_message(event):
         if lev:
             log.info('Otis leverage update detected: %sx | message=%s', lev, event.id)
         return
+    log.info('PARSED SIGNAL message=%s direction=%s symbol=%s lev=%s entries=%s entry_types=%s SL=%s TP=%s', event.id, sig.direction, sig.symbol, sig.leverage, sig.entries, sig.entry_types, sig.stop_loss, sig.targets)
     key = (sig.symbol, sig.direction, event.id)
     if key in seen:
         return
