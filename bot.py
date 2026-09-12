@@ -353,16 +353,38 @@ async def process_source_message(event, event_kind='NEW'):
         await notify(f'❌ Otis execution failed: {sig.symbol} {sig.direction}\n{e}')
 
 
-@client.on(events.NewMessage(chats=int(TG_SOURCE)))
+# Do not rely on Telethon's ``chats=`` event filter here. If a channel was
+# migrated, re-created, or the configured peer ID is stale, that filter can
+# silently prevent the handler from running at all. Receive updates globally,
+# then explicitly match the configured source chat ID so we can diagnose the
+# real Telegram peer ID in the logs.
+SOURCE_CHAT_ID = int(TG_SOURCE)
+
+
+async def _route_source_event(event, event_kind='NEW'):
+    chat_id = getattr(event, 'chat_id', None)
+    if chat_id != SOURCE_CHAT_ID:
+        # Only log messages that look like a trading signal/update. This keeps
+        # unrelated private/group traffic out of the logs while making a stale
+        # TG_SOURCE immediately visible.
+        text = event.raw_text or ''
+        if text and re.search(r'(?:LONG|SHORT|BUY|SELL|لانگ|شورت|خرید|فروش|🟢|🔴|اهرم|LEVERAGE)', text, re.I):
+            preview = re.sub(r'\s+', ' ', text).strip()[:300]
+            log.warning('OTIS MESSAGE OTHER CHAT chat_id=%s configured_source=%s message=%s text=%r', chat_id, SOURCE_CHAT_ID, event.id, preview)
+        return
+    await process_source_message(event, event_kind)
+
+
+@client.on(events.NewMessage())
 async def on_message(event):
-    await process_source_message(event, 'NEW')
+    await _route_source_event(event, 'NEW')
 
 
 # Some Telegram channels publish an image/caption first and then edit the caption.
-# NewMessage alone would miss the edited signal, so watch edits from the same source too.
-@client.on(events.MessageEdited(chats=int(TG_SOURCE)))
+# Watch edits from all chats too, then explicitly match the source ID.
+@client.on(events.MessageEdited())
 async def on_message_edited(event):
-    await process_source_message(event, 'EDITED')
+    await _route_source_event(event, 'EDITED')
 
 
 async def main():
