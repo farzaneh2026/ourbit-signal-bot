@@ -324,18 +324,26 @@ async def manager_loop():
         await asyncio.sleep(max(1, POLL_SECONDS))
 
 
-@client.on(events.NewMessage(chats=int(TG_SOURCE)))
-async def on_message(event):
+async def process_source_message(event, event_kind='NEW'):
     text = event.raw_text or ''
+    # Always log source messages so we can distinguish Telegram delivery problems
+    # from parser problems. Keep the preview bounded to avoid huge log entries.
+    preview = re.sub(r'\s+', ' ', text).strip()[:500]
+    log.info('OTIS %s MESSAGE chat_id=%s message=%s has_media=%s text=%r', event_kind, getattr(event, 'chat_id', None), event.id, bool(getattr(event, 'media', None)), preview)
+
     sig = parse_signal(text, event.id)
     if not sig:
         lev = parse_signal_update(text)
         if lev:
             log.info('Otis leverage update detected: %sx | message=%s', lev, event.id)
+        elif text and re.search(r'(?:LONG|SHORT|BUY|SELL|لانگ|شورت|خرید|فروش|🟢|🔴)', text, re.I):
+            log.warning('OTIS SIGNAL NOT PARSED message=%s text=%r', event.id, preview)
         return
+
     log.info('PARSED SIGNAL message=%s direction=%s symbol=%s lev=%s entries=%s entry_types=%s SL=%s TP=%s', event.id, sig.direction, sig.symbol, sig.leverage, sig.entries, sig.entry_types, sig.stop_loss, sig.targets)
     key = (sig.symbol, sig.direction, event.id)
     if key in seen:
+        log.info('Duplicate signal ignored: message=%s', event.id)
         return
     seen.add(key)
     try:
@@ -343,6 +351,18 @@ async def on_message(event):
     except Exception as e:
         log.exception('Signal execution failed')
         await notify(f'❌ Otis execution failed: {sig.symbol} {sig.direction}\n{e}')
+
+
+@client.on(events.NewMessage(chats=int(TG_SOURCE)))
+async def on_message(event):
+    await process_source_message(event, 'NEW')
+
+
+# Some Telegram channels publish an image/caption first and then edit the caption.
+# NewMessage alone would miss the edited signal, so watch edits from the same source too.
+@client.on(events.MessageEdited(chats=int(TG_SOURCE)))
+async def on_message_edited(event):
+    await process_source_message(event, 'EDITED')
 
 
 async def main():
