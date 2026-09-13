@@ -72,20 +72,23 @@ def parse_signal(text: str, message_id: int | None = None) -> Signal | None:
         sl = _num(sm.group(1))
 
     targets = []
-    # Capture target lines such as Targets: 7.744, 7.585, 7.429 or هدف 1...
-    tm = re.search(r'(?:TARGETS?|اهداف?|تارگت(?:ها)?)\s*[:：]?\s*([^\n]+)', t, re.I)
+    # Capture the full target block. Telegram commonly puts emoji numbering
+    # (1️⃣ 2️⃣ 3️⃣ 4️⃣) on separate lines after the heading.
+    tm = re.search(r'(?:TARGETS?|اهداف?|تارگت(?:ها)?)\s*[:：]?', t, re.I)
     if tm:
-        target_text = tm.group(1)
-        # Ignore list/emoji numbering such as 1️⃣ 2️⃣ 3️⃣ 4️⃣.
-        # Only decimal prices are valid TP values for these signals.
-        target_text = re.sub(r'[0-9]\ufe0f?\u20e3', ' ', target_text)
-        targets = [_num(x) for x in re.findall(r'\d+\.\d+', target_text)]
-    if len(targets) < 3:
-        for line in t.splitlines():
-            if re.search(r'(?:TARGET|TP|تارگت|هدف)\s*[123]', line, re.I):
-                nums = re.findall(r'\d+(?:\.\d+)?', line)
-                if nums:
-                    targets.append(_num(nums[-1]))
+        block = t[tm.end():]
+        for line in block.splitlines()[:8]:
+            if not line.strip():
+                if targets:
+                    break
+                continue
+            line = re.sub(r'[0-9]\ufe0f?\u20e3', ' ', line)
+            vals = re.findall(r'\d+\.\d+', line)
+            if vals:
+                targets.extend(_num(x) for x in vals)
+            elif targets and re.search(r'(?:STOP|SL|حد\s*ضرر)', line, re.I):
+                break
+
     # Keep first 3 unique values.
     seen = set(); clean = []
     for x in targets:
