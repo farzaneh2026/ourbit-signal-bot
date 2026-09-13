@@ -3,8 +3,6 @@ import hmac
 import json
 import time
 import uuid
-import socket
-from urllib.parse import urlparse
 from decimal import Decimal, ROUND_UP
 from typing import Any
 import requests
@@ -53,7 +51,6 @@ class OurbitClient:
         self.secret = OURBIT_API_SECRET
         self.s = requests.Session()
         self.s.headers.update({'User-Agent': 'otis-copytrader/2.0'})
-        self._last_health = None
 
     def _require_keys(self):
         if not self.key or not self.secret:
@@ -82,37 +79,18 @@ class OurbitClient:
         # Match the V1 Postman collection convention: key=value pairs in request order.
         return '&'.join(f'{k}={v}' for k, v in params.items() if v is not None)
 
-    def _request(self, method, path, *, params=None, payload=None, private=False):
-        url = self.base + path
+    def get(self, path, params=None, private=False):
         params = params or {}
-        try:
-            if method.upper() == 'GET':
-                headers = self._signed_headers('GET', query_string=self._query_string(params)) if private else {}
-                r = self.s.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
-            else:
-                payload = payload if payload is not None else {}
-                headers = self._signed_headers('POST', payload) if private else {'Content-Type': 'application/json'}
-                body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
-                r = self.s.post(url, data=body, headers=headers, timeout=REQUEST_TIMEOUT)
-        except requests.exceptions.Timeout as e:
-            raise OurbitError(f'Ourbit timeout calling {url}: {e}') from e
-        except requests.exceptions.ConnectionError as e:
-            host = urlparse(url).hostname or self.base
-            dns_hint = ''
-            try:
-                socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-            except socket.gaierror as de:
-                dns_hint = f' DNS lookup also failed for {host}: {de}.'
-            raise OurbitError(f'Ourbit DNS/connection error calling {url}: {e}.{dns_hint} Check Railway network/DNS and OURBIT_API_BASE.') from e
-        except requests.exceptions.RequestException as e:
-            raise OurbitError(f'Ourbit request error calling {url}: {e}') from e
+        headers = self._signed_headers('GET', query_string=self._query_string(params)) if private else {}
+        r = self.s.get(self.base + path, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
         return self._json(r)
 
-    def get(self, path, params=None, private=False):
-        return self._request('GET', path, params=params, private=private)
-
     def post(self, path, payload=None, private=True):
-        return self._request('POST', path, payload=payload, private=private)
+        payload = payload if payload is not None else {}
+        headers = self._signed_headers('POST', payload) if private else {'Content-Type': 'application/json'}
+        body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
+        r = self.s.post(self.base + path, data=body, headers=headers, timeout=REQUEST_TIMEOUT)
+        return self._json(r)
 
     @staticmethod
     def _json(r):
@@ -132,65 +110,6 @@ class OurbitClient:
 
     def ping(self):
         return self.get('/api/v1/contract/ping')
-
-    def health_check(self):
-        """Check official V1 contract API and report DNS status without raising."""
-        host = urlparse(self.base).hostname or ''
-        result = {'base': self.base, 'host': host, 'dns': False, 'api': False, 'error': None}
-        try:
-            socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-            result['dns'] = True
-        except socket.gaierror as e:
-            result['error'] = f'DNS lookup failed: {e}'
-            self._last_health = result
-            return result
-        try:
-            self.ping()
-            result['api'] = True
-        except OurbitError as e:
-            result['error'] = str(e)
-        self._last_health = result
-        return result
-
-    def diagnostic_dns(self, hosts=None):
-        """Resolve candidate Ourbit hosts for diagnosis only; never switches API base."""
-        hosts = hosts or ['contract.ourbit.com', 'api.ourbit.com', 'futures.ourbit.com']
-        out = {}
-        for host in hosts:
-            try:
-                addrs = sorted({x[4][0] for x in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)})
-                out[host] = {'ok': True, 'addresses': addrs}
-            except socket.gaierror as e:
-                out[host] = {'ok': False, 'error': str(e)}
-        return out
-
-    def diagnostic_http_bases(self, symbol='BTC_USDT'):
-        """Test public V1 paths on alternate Ourbit hosts; never changes self.base and never trades."""
-        hosts = ['api.ourbit.com', 'futures.ourbit.com']
-        paths = [
-            '/api/v1/contract/ping',
-            '/api/v1/contract/detail',
-        ]
-        out = {}
-        for host in hosts:
-            base = f'https://{host}'
-            out[host] = {}
-            for path in paths:
-                url = base + path
-                params = {'symbol': symbol} if path.endswith('/detail') else None
-                try:
-                    r = self.s.get(url, params=params, timeout=REQUEST_TIMEOUT)
-                    content_type = r.headers.get('content-type', '')
-                    body = r.text[:500]
-                    out[host][path] = {
-                        'ok': 200 <= r.status_code < 400,
-                        'status': r.status_code,
-                        'content_type': content_type,
-                        'body': body,
-                    }
-                except requests.exceptions.RequestException as e:
-                    out[host][path] = {'ok': False, 'error': str(e)}
-        return out
 
     def contract_detail(self, symbol=None):
         params = {'symbol': symbol} if symbol else {}
@@ -218,15 +137,6 @@ class OurbitClient:
 
     def asset_usdt(self):
         return self.get('/api/v1/private/account/asset/USDT', private=True)
-
-    def futures_order_history(self, symbol='BTC_USDT'):
-        # Read-only Futures endpoint covered by the API key's read permissions.
-        # A symbol is supplied so the request matches the official V1 collection.
-        return self.get('/api/v1/private/order/list/history_orders', {
-            'page_num': 1,
-            'page_size': 20,
-            'symbol': symbol,
-        }, private=True)
 
     def change_leverage(self, symbol, leverage):
         return self.post('/api/v1/private/position/change_leverage', {

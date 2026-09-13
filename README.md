@@ -1,30 +1,62 @@
 # Otis CopyTrader → Ourbit Futures v2
 
-Separate Telegram-to-Ourbit futures copy trader.
+A separate project from the existing Toobit bot.
 
-## Main behavior
-- Telethon `StringSession` from Railway `TG_SESSION` (no phone prompt on Railway).
-- Parses LONG/SHORT signals, symbol, leverage, up to 2 entries, SL and up to 3 targets.
-- Uses Ourbit V1 contract metadata before sizing.
-- Market Entry 1 + Limit Entry 2 when supplied by the signal.
-- One persistent trade state is used for both entries; Entry 2 no longer overwrites Entry 1 state.
-- Protective SL is attached to Market Entry 1.
-- TP1/TP2/TP3 are managed as partial market closes from live remaining position size.
-- After TP1, the bot attempts to move the existing exchange stop to entry/break-even.
-- Channel follow-up commands are supported for:
-  - percentage partial close (`30% close`, `30 درصد ببند`)
-  - half close (`نصف پوزیشن`)
-  - full close / exit
-  - break-even / risk-free (`ریسک فری`, `break even`, `SL to entry`)
-  - explicit SL move (`SL 123.45` / `SL to 123.45`)
-- A follow-up command without a symbol is executed only when exactly one active managed trade is unambiguous.
+## What was fixed in v2
+- Uses the official Ourbit V1 contract endpoints confirmed by the official Postman collection.
+- Reads contract metadata before sizing so `contractSize`, minimum volume, volume step, minimum notional and maximum leverage can be respected when those fields are returned by Ourbit.
+- Market Entry 1 + Limit Entry 2.
+- LONG and SHORT.
+- Signal leverage, capped by the contract's reported maximum leverage.
+- Protective SL is attached to the opening market order. TP is deliberately NOT attached to the opening order because that could close the whole position instead of doing partial TP.
+- TP1/TP2/TP3 are managed as partial market closes using the live remaining position size.
+- After TP1, the bot attempts to move the existing exchange stop order to Entry (break-even). If the stop order cannot be found, it logs a warning and does not pretend the move succeeded.
 - State is persisted in `otis_state.json`.
-- `DRY_RUN=true` is the safe default.
+- Starts with `DRY_RUN=true`.
 
-## Important
-The current default futures V1 base remains `https://futures.ourbit.com` because that is the V1 contract base supported by the project. Do not change it to the generic `api.ourbit.com` unless Ourbit documents a compatible V1 contract replacement.
+## Important safety behavior
+Do not switch `DRY_RUN=false` until the Railway logs show that Telegram parsing, Ourbit public contract/ticker calls and private API authentication all work correctly.
 
-Do not switch `DRY_RUN=false` until Telegram parsing, public Ourbit endpoints, and private authentication have been verified.
+The official Ourbit V1 collection confirms the futures endpoints for contract detail, assets, positions, open orders, leverage, order submission, plan orders and stop orders. citeturn7view0turn8view0turn9view0
 
-## Security
-Never commit `.env`, Telegram StringSession files/values, API keys, API secrets, or `otis_state.json`.
+## Required Railway Variables
+- `TG_API_ID`
+- `TG_API_HASH`
+- `TG_SESSION`
+- `TG_SOURCE=-1003980416205`
+- `OURBIT_API_KEY`
+- `OURBIT_API_SECRET`
+
+Recommended first test:
+- `DRY_RUN=true`
+- `MAX_MARGIN_PCT_PER_ENTRY=0.06`
+- `DEFAULT_LEVERAGE=10`
+- `POSITION_MODE=2`
+
+Never put API Secret or Telegram session in the source code or ZIP.
+
+
+## Telegram / Railway deployment
+
+This version uses Telethon `StringSession` directly from the `TG_SESSION`
+Railway environment variable. Railway therefore does not need a local
+`.session` file and should not ask for a phone number at runtime.
+
+Generate the StringSession once on a trusted local machine with:
+
+```bash
+python create_session.py
+```
+
+Then put the printed value in Railway as `TG_SESSION`.
+
+Required Telegram variables:
+- `TG_API_ID`
+- `TG_API_HASH`
+- `TG_SESSION`
+- `TG_SOURCE=-1003980416205`
+
+Security:
+- Never commit `.env`, Telegram StringSession values, Telegram session files,
+  `OURBIT_API_SECRET`, API keys, or other credentials to GitHub.
+- `DRY_RUN=true` remains the safe default and must stay enabled during testing.

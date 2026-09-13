@@ -2,7 +2,6 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-
 @dataclass
 class Signal:
     direction: str
@@ -16,87 +15,15 @@ class Signal:
     raw_text: str = ''
 
 
-def _normalize_digits(text: str) -> str:
-    """Convert Persian/Arabic-Indic digits to ASCII digits for reliable regex parsing."""
-    trans = str.maketrans(
-        '۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩',
-        '01234567890123456789',
-    )
-    return text.translate(trans)
-
-
 def _num(s: str) -> float:
     return float(s.replace(',', '').strip())
 
 
-def _extract_price_values(text: str) -> list[float]:
-    """Extract numeric price-like values without treating labels as prices."""
-    values = []
-    for m in re.finditer(r'(?<![A-Za-z0-9_])\d+(?:\.\d+)?(?![A-Za-z0-9_])', text):
-        try:
-            values.append(_num(m.group(0)))
-        except ValueError:
-            continue
-    return values
-
-
-def _extract_target_line_values(line: str) -> list[float]:
-    """Extract actual target prices from a target line, ignoring numbering/percent/R values."""
-    cleaned = re.sub(
-        r'^\s*(?:TARGETS?|TP|تارگت(?:\s*ها)?|هدف(?:\s*ها)?)\s*[1-4]?\s*[-:：=]?\s*',
-        '', line, flags=re.I
-    )
-    cleaned = re.sub(r'\b\d+(?:\.\d+)?\s*R\b', '', cleaned, flags=re.I)
-    cleaned = re.sub(r'\b\d+(?:\.\d+)?\s*%', '', cleaned)
-    return _extract_price_values(cleaned)
-
-
-def _extract_target_block(lines: list[str], header_index: int) -> list[float]:
-    """Read the numeric target lines following a 'تارگت ها:' / 'Targets:' header."""
-    values = []
-    for line in lines[header_index + 1:]:
-        stripped = line.strip()
-        if not stripped:
-            if values:
-                break
-            continue
-
-        # A new section/header means the target block is finished.
-        if re.search(r'(?:حد\s*ضرر|STOP\s*LOSS|SL|ورود|ENTRY|اهرم|LEVERAGE)', stripped, re.I):
-            break
-
-        nums = _extract_price_values(stripped)
-        if not nums:
-            # Ignore decorative/emoji-only lines while we are still in the block.
-            if values:
-                break
-            continue
-
-        # In the Otis format each target line is like '0.940 1️⃣'.
-        # The first decimal/price is the target; the trailing number is just its ordinal.
-        price = None
-        for n in nums:
-            if '.' in str(n):
-                price = n
-                break
-        if price is None:
-            # Accept a plain integer target only when the line contains no ordinal-like
-            # second number. This keeps labels such as '1 2 3' from becoming prices.
-            if len(nums) == 1:
-                price = nums[0]
-            else:
-                continue
-        values.append(price)
-
-        # Otis currently publishes four target levels.
-        if len(values) >= 4:
-            break
-    return values
-
-
 def parse_signal(text: str, message_id: int | None = None) -> Signal | None:
-    # Normalize decimal separators and Persian/Arabic-Indic digits first.
-    t = _normalize_digits(text or '').replace('٬', ',').replace('٫', '.')
+    t = text.replace('٬', ',').replace('٫', '.')
+    # Normalize Persian/Arabic-Indic digits so labels such as ورود ۱/۲ and 1️⃣ work.
+    trans = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
+    t = t.translate(trans)
     up = t.upper()
 
     if re.search(r'\b(?:LONG|BUY|لانگ|خرید)\b|🟢', up):
@@ -120,6 +47,7 @@ def parse_signal(text: str, message_id: int | None = None) -> Signal | None:
 
     entries = [None, None]
     entry_types = ['market', 'limit']
+    # Entry 1 / Entry 2 lines; Persian and English labels are supported.
     for idx, pat in enumerate([
         r'(?:ENTRY\s*1|ورود\s*1)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
         r'(?:ENTRY\s*2|ورود\s*2)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
@@ -128,9 +56,13 @@ def parse_signal(text: str, message_id: int | None = None) -> Signal | None:
         if em:
             entries[idx] = _num(em.group(1))
 
+    # If the signal explicitly says market on entry 1, price is optional.
     if entries[0] is not None:
         line = next((x for x in t.splitlines() if re.search(r'(ENTRY\s*1|ورود\s*1)', x, re.I)), '')
-        entry_types[0] = 'market' if re.search(r'MARKET|مارکت', line, re.I) else 'limit'
+        if re.search(r'MARKET|مارکت', line, re.I):
+            entry_types[0] = 'market'
+        else:
+            entry_types[0] = 'limit'
     if entries[1] is not None:
         entry_types[1] = 'limit'
 
@@ -140,56 +72,33 @@ def parse_signal(text: str, message_id: int | None = None) -> Signal | None:
         sl = _num(sm.group(1))
 
     targets = []
-    lines = t.splitlines()
-
-    # Explicit target lines such as 'TP1: 0.940'.
-    for line in lines:
-        if re.search(r'(?:TARGETS?|TP|تارگت(?:\s*ها)?|هدف(?:\s*ها)?)\s*[1-4]?\s*[-:：=]', line, re.I):
-            vals = _extract_target_line_values(line)
-            if vals:
-                targets.extend(vals)
-
-    # Otis format: 'تارگت ها:' followed by one price per line, often with emoji ordinals.
-    if not targets:
-        for i, line in enumerate(lines):
-            if re.search(r'(?:TARGETS?|اهداف?|تارگت(?:\s*ها)?|هدف(?:\s*ها)?)\s*[:：]?\s*$', line, re.I):
-                targets.extend(_extract_target_block(lines, i))
-                if targets:
-                    break
-
-    # Inline labels such as 'TP1 11.70 TP2 11.50 TP3 11.30 TP4 11.10'.
-    if not targets:
-        for m in re.finditer(
-            r'(?:TARGET|TP|تارگت|هدف)\s*([1-4])\s*[:：=\-]?\s*([0-9]+(?:\.[0-9]+)?)',
-            t, re.I
-        ):
-            targets.append(_num(m.group(2)))
-
-    # Fallback for a 'Targets: ...' line.
-    if not targets:
-        tm = re.search(r'(?:TARGETS?|اهداف?|تارگت(?:\s*ها)?|هدف(?:\s*ها)?)\s*[:：]?\s*([^\n]+)', t, re.I)
-        if tm:
-            cleaned = re.sub(r'\b\d+(?:\.\d+)?\s*R\b', '', tm.group(1), flags=re.I)
-            cleaned = re.sub(r'\b\d+(?:\.\d+)?\s*%', '', cleaned)
-            targets = _extract_price_values(cleaned)
-
-    # Keep unique targets in signal order. Do not arbitrarily discard TP4.
-    seen_values = set()
-    clean = []
+    # Capture target lines such as Targets: 7.744, 7.585, 7.429 or هدف 1...
+    tm = re.search(r'(?:TARGETS?|اهداف?|تارگت(?:ها)?)\s*[:：]?\s*([^\n]+)', t, re.I)
+    if tm:
+        target_text = tm.group(1)
+        # Ignore list/emoji numbering such as 1️⃣ 2️⃣ 3️⃣ 4️⃣.
+        # Only decimal prices are valid TP values for these signals.
+        target_text = re.sub(r'[0-9]\ufe0f?\u20e3', ' ', target_text)
+        targets = [_num(x) for x in re.findall(r'\d+\.\d+', target_text)]
+    if len(targets) < 3:
+        for line in t.splitlines():
+            if re.search(r'(?:TARGET|TP|تارگت|هدف)\s*[123]', line, re.I):
+                nums = re.findall(r'\d+(?:\.\d+)?', line)
+                if nums:
+                    targets.append(_num(nums[-1]))
+    # Keep first 3 unique values.
+    seen = set(); clean = []
     for x in targets:
-        if x not in seen_values:
-            clean.append(x)
-            seen_values.add(x)
-    targets = clean[:4]
+        if x not in seen:
+            clean.append(x); seen.add(x)
+    targets = clean[:3]
 
     if sl is None or not targets:
         return None
-
     if entries[0] is None and entries[1] is None:
-        # Market entry may be expressed without a numeric price.
+        # Some messages contain only one market entry without a number.
         if re.search(r'(?:ENTRY\s*1|ورود\s*1).*MARKET|مارکت', t, re.I):
-            entry_types[0] = 'market'
-        elif re.search(r'\bMARKET\b|مارکت', t, re.I):
+            entries[0] = None
             entry_types[0] = 'market'
         else:
             return None

@@ -72,25 +72,12 @@ def validate_levels(sig: Signal):
     if sig.stop_loss is None or not sig.targets:
         raise ValueError('Signal must contain SL and at least one target')
     targets = [x for x in sig.targets if x is not None]
-    if not targets:
-        raise ValueError('Signal must contain at least one numeric target')
-
-    # The direction geometry is evaluated from the actual signal values.
-    # Numeric entries, when supplied, are also checked; a market entry is None
-    # and therefore cannot be compared until the live price is known.
-    numeric_entries = [x for x in sig.entries if x is not None]
     if sig.direction == 'LONG':
         if sig.stop_loss >= min(targets):
             raise ValueError('Invalid LONG SL/TP geometry')
-        if numeric_entries:
-            if not (sig.stop_loss < min(numeric_entries) and max(numeric_entries) < min(targets)):
-                raise ValueError('Invalid LONG Entry/SL/TP geometry')
     else:
         if sig.stop_loss <= max(targets):
             raise ValueError('Invalid SHORT SL/TP geometry')
-        if numeric_entries:
-            if not (max(targets) < max(numeric_entries) and min(numeric_entries) < sig.stop_loss):
-                raise ValueError('Invalid SHORT Entry/SL/TP geometry')
 
 
 async def notify(text):
@@ -193,11 +180,10 @@ async def execute(sig: Signal):
     if DRY_RUN:
         # Public contract + ticker checks are useful even in dry-run, but no private trade.
         live = current_price(sig.symbol)
-        # DRY_RUN must remain independent of private asset permission.
-        # The previous code queried the USDT asset endpoint here whenever API
-        # keys existed, causing a harmless dry-run to fail with Ourbit code 701.
-        if OURBIT_API_KEY and OURBIT_API_SECRET:
-            log.info('DRY RUN public check: %s live=%s contract=%s | private balance check skipped', sig.symbol, live, meta)
+        margin = (balance_usdt() * MAX_MARGIN_PCT_PER_ENTRY) if OURBIT_API_KEY and OURBIT_API_SECRET else None
+        if margin:
+            qty, notional, _ = calc_volume(live, lev, equity=balance_usdt(), contract=contract)
+            log.info('DRY RUN sizing %s: live=%s qty=%s notional=%s max_margin=%s', sig.symbol, live, qty, notional, margin)
         else:
             log.info('DRY RUN public check: %s live=%s contract=%s', sig.symbol, live, meta)
         return
@@ -324,28 +310,30 @@ async def manager_loop():
         await asyncio.sleep(max(1, POLL_SECONDS))
 
 
-async def process_source_message(event, event_kind='NEW'):
+async def _process_signal_message(event, edited=False):
     text = event.raw_text or ''
-    # Always log source messages so we can distinguish Telegram delivery problems
-    # from parser problems. Keep the preview bounded to avoid huge log entries.
-    preview = re.sub(r'\s+', ' ', text).strip()[:500]
-    log.info('OTIS %s MESSAGE chat_id=%s message=%s has_media=%s text=%r', event_kind, getattr(event, 'chat_id', None), event.id, bool(getattr(event, 'media', None)), preview)
+    kind = 'EDITED MESSAGE' if edited else 'MESSAGE'
+    log.info('OTIS %s chat_id=%s message=%s text=%r', kind, event.chat_id, event.id, text)
 
     sig = parse_signal(text, event.id)
     if not sig:
         lev = parse_signal_update(text)
         if lev:
             log.info('Otis leverage update detected: %sx | message=%s', lev, event.id)
-        elif text and re.search(r'(?:LONG|SHORT|BUY|SELL|لانگ|شورت|خرید|فروش|🟢|🔴)', text, re.I):
-            log.warning('OTIS SIGNAL NOT PARSED message=%s text=%r', event.id, preview)
+        else:
+            log.warning('OTIS signal parse failed chat_id=%s message=%s', event.chat_id, event.id)
         return
 
-    log.info('PARSED SIGNAL message=%s direction=%s symbol=%s lev=%s entries=%s entry_types=%s SL=%s TP=%s', event.id, sig.direction, sig.symbol, sig.leverage, sig.entries, sig.entry_types, sig.stop_loss, sig.targets)
+    # Edited messages reuse the same Telegram message id. This key prevents
+    # the same signal from being executed twice when a channel edits it.
     key = (sig.symbol, sig.direction, event.id)
     if key in seen:
-        log.info('Duplicate signal ignored: message=%s', event.id)
+        log.info('OTIS duplicate signal ignored: %s', key)
         return
     seen.add(key)
+    log.info('OTIS PARSED signal direction=%s symbol=%s leverage=%s entries=%s entry_types=%s SL=%s TP=%s message=%s',
+             sig.direction, sig.symbol, sig.leverage, sig.entries, sig.entry_types,
+             sig.stop_loss, sig.targets, event.id)
     try:
         await execute(sig)
     except Exception as e:
@@ -353,38 +341,14 @@ async def process_source_message(event, event_kind='NEW'):
         await notify(f'❌ Otis execution failed: {sig.symbol} {sig.direction}\n{e}')
 
 
-# Do not rely on Telethon's ``chats=`` event filter here. If a channel was
-# migrated, re-created, or the configured peer ID is stale, that filter can
-# silently prevent the handler from running at all. Receive updates globally,
-# then explicitly match the configured source chat ID so we can diagnose the
-# real Telegram peer ID in the logs.
-SOURCE_CHAT_ID = int(TG_SOURCE)
-
-
-async def _route_source_event(event, event_kind='NEW'):
-    chat_id = getattr(event, 'chat_id', None)
-    if chat_id != SOURCE_CHAT_ID:
-        # Only log messages that look like a trading signal/update. This keeps
-        # unrelated private/group traffic out of the logs while making a stale
-        # TG_SOURCE immediately visible.
-        text = event.raw_text or ''
-        if text and re.search(r'(?:LONG|SHORT|BUY|SELL|لانگ|شورت|خرید|فروش|🟢|🔴|اهرم|LEVERAGE)', text, re.I):
-            preview = re.sub(r'\s+', ' ', text).strip()[:300]
-            log.warning('OTIS MESSAGE OTHER CHAT chat_id=%s configured_source=%s message=%s text=%r', chat_id, SOURCE_CHAT_ID, event.id, preview)
-        return
-    await process_source_message(event, event_kind)
-
-
-@client.on(events.NewMessage())
+@client.on(events.NewMessage(chats=int(TG_SOURCE)))
 async def on_message(event):
-    await _route_source_event(event, 'NEW')
+    await _process_signal_message(event, edited=False)
 
 
-# Some Telegram channels publish an image/caption first and then edit the caption.
-# Watch edits from all chats too, then explicitly match the source ID.
-@client.on(events.MessageEdited())
+@client.on(events.MessageEdited(chats=int(TG_SOURCE)))
 async def on_message_edited(event):
-    await _route_source_event(event, 'EDITED')
+    await _process_signal_message(event, edited=True)
 
 
 async def main():
@@ -394,33 +358,9 @@ async def main():
     if not TG_SESSION:
         raise SystemExit('TG_SESSION is not set. Generate a Telethon StringSession and add it to Railway variables.')
     log.info('Otis CopyTrader v2 starting | source=%s | DRY_RUN=%s | Ourbit=%s', TG_SOURCE, DRY_RUN, OURBIT_API_BASE)
-    try:
-        health = exchange.health_check()
-        log.info('Ourbit V1 API health: %s', health)
-        if not health.get('api'):
-            log.warning('Ourbit DNS/API is not reachable yet; Telegram will keep running safely.')
-            log.info('Ourbit DNS diagnostic (no base switching): %s', exchange.diagnostic_dns())
-            log.info('Ourbit V1 HTTP diagnostic (no base switching, no trading): %s', exchange.diagnostic_http_bases())
-    except Exception as e:
-        log.warning('Ourbit startup diagnostic failed (non-fatal): %s', e)
     await client.start(bot_token=None)
     me = await client.get_me()
     log.info('Telegram account connected: %s', getattr(me, 'username', None) or getattr(me, 'id', None))
-
-    # Read-only Futures API authentication test. Do not query the Asset endpoint here:
-    # Ourbit's current personal API documentation lists Futures Order History under
-    # read-only permissions, while the Asset endpoint may require a separate permission.
-    try:
-        if OURBIT_API_KEY and OURBIT_API_SECRET:
-            data = exchange.futures_order_history('BTC_USDT')
-            if isinstance(data, dict) and data.get('success') is False:
-                raise OurbitError(str(data))
-            log.info('Ourbit private API authentication: OK | Futures order-history endpoint responded successfully')
-        else:
-            log.error('Ourbit private API authentication: FAILED | OURBIT_API_KEY / OURBIT_API_SECRET are not configured')
-    except Exception as e:
-        log.error('Ourbit private API authentication: FAILED | %s', e)
-
     manager = asyncio.create_task(manager_loop())
     try:
         await client.run_until_disconnected()
