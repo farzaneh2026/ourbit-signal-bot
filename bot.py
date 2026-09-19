@@ -93,7 +93,6 @@ def balance_usdt():
             if v > 0:
                 return v
 
-    # Fallback to assets endpoint.
     data = exchange.assets()
 
     records = _find_records(data)
@@ -160,7 +159,7 @@ async def notify(text):
 
 def parse_signal_update(text):
     """
-    Detect simple Otis leverage-only follow-ups,
+    Detect simple leverage-only follow-ups,
     e.g. 'اهرم 10 وارد بشید'.
     """
 
@@ -326,7 +325,6 @@ async def execute(sig: Signal):
             f'Invalid leverage: {lev}'
         )
 
-    # Normalize symbol format expected by Ourbit V1.
     sig.symbol = (
         sig.symbol
         .upper()
@@ -334,12 +332,10 @@ async def execute(sig: Signal):
         .replace('/', '_')
     )
 
-    # Public contract information.
     contract = exchange.contract_for(sig.symbol)
 
     meta = exchange.normalize_contract(contract)
 
-    # Never exceed exchange maximum leverage.
     lev = min(
         lev,
         meta['max_leverage']
@@ -356,7 +352,7 @@ async def execute(sig: Signal):
     )
 
     await notify(
-        f'📡 Otis signal\n'
+        f'📡 Toobit signal\n'
         f'{sig.direction} {sig.symbol} | {lev}x\n'
         f'SL {sig.stop_loss}\n'
         f'TP {sig.targets}'
@@ -365,18 +361,12 @@ async def execute(sig: Signal):
     # ============================================================
     # DRY RUN
     # ============================================================
-    #
-    # IMPORTANT:
-    # Do NOT read private account balance while testing.
-    #
-    # This prevents API permission error 701 from stopping
-    # parser / contract / ticker testing.
-    #
+
     if DRY_RUN:
         live = current_price(sig.symbol)
 
         log.info(
-            'DRY RUN OK | source=TOOBIT | %s | direction=%s | live=%s | '
+            'DRY RUN OK | source=TG_SOURCE | %s | direction=%s | live=%s | '
             'entries=%s | SL=%s | TP=%s | max_leverage=%s',
             sig.symbol,
             sig.direction,
@@ -393,10 +383,8 @@ async def execute(sig: Signal):
     # LIVE TRADING
     # ============================================================
 
-    # Balance is only read when real trading is enabled.
     equity = balance_usdt()
 
-    # Ensure leverage is set before opening the position.
     try:
         exchange.change_leverage(
             sig.symbol,
@@ -438,10 +426,6 @@ async def execute(sig: Signal):
                 contract
             )
 
-            # Attach SL to opening order.
-            #
-            # TP1 is NOT attached here because TP1 must only
-            # close its configured partial percentage.
             res = exchange.submit(
                 sig.symbol,
                 open_side(sig.direction),
@@ -523,7 +507,7 @@ async def execute(sig: Signal):
         save_state()
 
     await notify(
-        f'✅ Otis order processing started: '
+        f'✅ Toobit order processing started: '
         f'{sig.symbol} {sig.direction} | {lev}x'
     )
 
@@ -545,7 +529,6 @@ async def manage_trade(key, trade):
     )
 
     if not pos:
-        # Position may simply be waiting for Entry 2.
         return
 
     hold = int(
@@ -564,7 +547,6 @@ async def manage_trade(key, trade):
     if hold <= 0:
         return
 
-    # Capture first observed live position as base quantity.
     if not trade.get('initial_hold'):
         trade['initial_hold'] = hold
         save_state()
@@ -598,8 +580,6 @@ async def manage_trade(key, trade):
             trade['tp_done'][i] = True
             continue
 
-        # Close TP1/TP2 according to original position.
-        # TP3 closes the remaining position.
         base = int(
             trade.get(
                 'initial_hold'
@@ -635,7 +615,6 @@ async def manage_trade(key, trade):
             remaining
         )
 
-        # Partial close is sent as market close.
         res = exchange.submit(
             symbol,
             close_side(direction),
@@ -659,7 +638,6 @@ async def manage_trade(key, trade):
         trade['tp_done'][i] = True
         save_state()
 
-        # TP1 -> move SL to break-even.
         if i == 0 and not trade.get('be_done'):
             sid = stop_order_id(symbol)
 
@@ -696,7 +674,6 @@ async def manage_trade(key, trade):
             trade['be_done'] = True
             save_state()
 
-        # Refresh position after each close.
         await asyncio.sleep(0.5)
 
         pos = live_position(
@@ -752,7 +729,7 @@ async def _process_signal_message(
     )
 
     log.info(
-        'OTIS %s chat_id=%s message=%s text=%r',
+        'TOOBIT %s chat_id=%s message=%s text=%r',
         kind,
         event.chat_id,
         event.id,
@@ -771,7 +748,7 @@ async def _process_signal_message(
 
         if lev:
             log.info(
-                'Otis leverage update detected: '
+                'Leverage update detected: '
                 '%sx | message=%s',
                 lev,
                 event.id
@@ -779,7 +756,7 @@ async def _process_signal_message(
 
         else:
             log.warning(
-                'OTIS signal parse failed '
+                'Signal parse failed '
                 'chat_id=%s message=%s',
                 event.chat_id,
                 event.id
@@ -787,8 +764,6 @@ async def _process_signal_message(
 
         return
 
-    # Edited messages reuse the same Telegram message id.
-    # This prevents the same signal from executing twice.
     key = (
         sig.symbol,
         sig.direction,
@@ -797,7 +772,7 @@ async def _process_signal_message(
 
     if key in seen:
         log.info(
-            'OTIS duplicate signal ignored: %s',
+            'Duplicate signal ignored: %s',
             key
         )
         return
@@ -805,7 +780,7 @@ async def _process_signal_message(
     seen.add(key)
 
     log.info(
-        'OTIS PARSED signal '
+        'TOOBIT PARSED signal '
         'direction=%s symbol=%s leverage=%s '
         'entries=%s entry_types=%s SL=%s TP=%s '
         'message=%s',
@@ -828,14 +803,14 @@ async def _process_signal_message(
         )
 
         await notify(
-            f'❌ Otis execution failed: '
+            f'❌ Toobit execution failed: '
             f'{sig.symbol} {sig.direction}\n{e}'
         )
 
 
 @client.on(
     events.NewMessage(
-        chats=int(TOOBIT_SOURCE)
+        chats=int(TG_SOURCE)
     )
 )
 async def on_message(event):
@@ -847,7 +822,7 @@ async def on_message(event):
 
 @client.on(
     events.MessageEdited(
-        chats=int(TOOBIT_SOURCE)
+        chats=int(TG_SOURCE)
     )
 )
 async def on_message_edited(event):
@@ -872,15 +847,24 @@ async def main():
             'and add it to Railway variables.'
         )
 
-    if not TOOBIT_SOURCE:
+    if not TG_SOURCE:
         raise SystemExit(
-            'TOOBIT_SOURCE is not set. '
+            'TG_SOURCE is not set. '
             'Set it to the Chat ID of the Toobit AI Trader chat.'
         )
 
+    try:
+        source_chat_id = int(TG_SOURCE)
+    except (TypeError, ValueError):
+        raise SystemExit(
+            f'TG_SOURCE must be a numeric Telegram Chat ID. '
+            f'Current value: {TG_SOURCE!r}'
+        )
+
     log.info(
-        'Toobit CopyTrader starting | source=TOOBIT | chat_id=%s | DRY_RUN=%s | Ourbit=%s',
-        TOOBIT_SOURCE,
+        'Toobit CopyTrader starting | source=TG_SOURCE | '
+        'chat_id=%s | DRY_RUN=%s | Ourbit=%s',
+        source_chat_id,
         DRY_RUN,
         OURBIT_API_BASE
     )
