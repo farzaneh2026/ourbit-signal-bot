@@ -1,108 +1,109 @@
 import re
-from dataclasses import dataclass
-from typing import Optional
-
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 @dataclass
 class Signal:
     direction: str
     symbol: str
     leverage: Optional[int] = None
-    entry: Optional[float] = None
+    entries: List[Optional[float]] = field(default_factory=lambda: [None, None])
+    entry_types: List[str] = field(default_factory=lambda: ['market', 'limit'])
     stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    targets: List[float] = field(default_factory=list)
     source_message_id: Optional[int] = None
     raw_text: str = ''
-    confirmed: bool = False
 
 
-def _num(value: str) -> float:
-    return float(value.replace(',', '').strip())
+def _num(s: str) -> float:
+    return float(s.replace(',', '').strip())
 
 
-def _number_after(patterns, text):
-    for pattern in patterns:
-        m = re.search(pattern, text, re.I)
-        if m:
-            return _num(m.group(1))
-    return None
-
-
-def parse_toobit_signal(text: str, message_id: int | None = None) -> Signal | None:
-    if not text:
-        return None
-
+def parse_signal(text: str, message_id: int | None = None) -> Signal | None:
     t = text.replace('٬', ',').replace('٫', '.')
+    # Normalize Persian/Arabic-Indic digits so labels such as ورود ۱/۲ and 1️⃣ work.
     trans = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
     t = t.translate(trans)
     up = t.upper()
 
-    # Only copy a real Toobit execution confirmation by default. This avoids
-    # copying a pending signal that the user later rejects on Toobit.
-    confirmed = bool(
-        re.search(r'معامله\s+باز\s+شد', t, re.I)
-        or re.search(r'TP\s*\+\s*SL\s*(?:تأیید|تایید)', t, re.I)
-        or re.search(r'TP\s*\+\s*SL\s+CONFIRMED', up, re.I)
-    )
-
-    if not confirmed:
-        return None
-
-    if re.search(r'\b(?:BUY|LONG)\b|🟢', up):
+    if re.search(r'\b(?:LONG|BUY|لانگ|خرید)\b|🟢', up):
         direction = 'LONG'
-    elif re.search(r'\b(?:SELL|SHORT)\b|🔴', up):
+    elif re.search(r'\b(?:SHORT|SELL|شورت|فروش)\b|🔴', up):
         direction = 'SHORT'
     else:
         return None
 
-    m = re.search(r'\b([A-Z0-9]{2,20})\s*(?:[-_/])\s*USDT\b', up)
+    m = re.search(r'\b([A-Z0-9]{2,15})\s*/\s*USDT\b', up)
+    if not m:
+        m = re.search(r'\b([A-Z0-9]{2,15})[-_]USDT\b', up)
     if not m:
         return None
     symbol = m.group(1) + '_USDT'
 
-    leverage = _number_after([
-        r'(?:LEVERAGE|اهرم)\s*[:：]?\s*(\d+)\s*[xX×]?'
-    ], up)
-    leverage = int(leverage) if leverage is not None else None
+    lev = None
+    lm = re.search(r'(?:LEVERAGE|اهرم)\s*[:：]?\s*(\d+)\s*[xX×]?', up, re.I)
+    if lm:
+        lev = int(lm.group(1))
 
-    entry = _number_after([
-        r'(?:^|\n)\s*ENTRY\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
-        r'(?:^|\n)\s*ورود\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
-    ], t)
+    entries = [None, None]
+    entry_types = ['market', 'limit']
+    # Entry 1 / Entry 2 lines; Persian and English labels are supported.
+    for idx, pat in enumerate([
+        r'(?:ENTRY\s*1|ورود\s*1)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
+        r'(?:ENTRY\s*2|ورود\s*2)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
+    ]):
+        em = re.search(pat, up, re.I)
+        if em:
+            entries[idx] = _num(em.group(1))
 
-    tp = _number_after([
-        r'(?:TP\s*\(\s*FULL[^\n]*\)|TP\s*\(\s*FULL\s*/\s*2R\s*\)|TP)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
-        r'(?:تیک?\s*پی|هدف)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
-    ], t)
+    # If the signal explicitly says market on entry 1, price is optional.
+    if entries[0] is not None:
+        line = next((x for x in t.splitlines() if re.search(r'(ENTRY\s*1|ورود\s*1)', x, re.I)), '')
+        if re.search(r'MARKET|مارکت', line, re.I):
+            entry_types[0] = 'market'
+        else:
+            entry_types[0] = 'limit'
+    if entries[1] is not None:
+        entry_types[1] = 'limit'
 
-    sl = _number_after([
-        r'(?:^|\n)\s*SL\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
-        r'(?:^|\n)\s*حد\s*ضرر\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)',
-    ], t)
+    sl = None
+    sm = re.search(r'(?:SL|STOP\s*LOSS|حد\s*ضرر)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)', up, re.I)
+    if sm:
+        sl = _num(sm.group(1))
 
-    # Some Toobit messages label the plan as "TP (Full / 2R)".
-    if tp is None:
-        m = re.search(r'TP[^\n]*?([0-9]+(?:\.[0-9]+)?)', t, re.I)
-        if m:
-            tp = _num(m.group(1))
+    targets = []
+    # Capture the full target block. Telegram commonly puts emoji numbering
+    # (1️⃣ 2️⃣ 3️⃣ 4️⃣) on separate lines after the heading.
+    tm = re.search(r'(?:TARGETS?|اهداف?|تارگت(?:ها)?)\s*[:：]?', t, re.I)
+    if tm:
+        block = t[tm.end():]
+        for line in block.splitlines()[:8]:
+            if not line.strip():
+                if targets:
+                    break
+                continue
+            line = re.sub(r'[0-9]\ufe0f?\u20e3', ' ', line)
+            vals = re.findall(r'\d+\.\d+', line)
+            if vals:
+                targets.extend(_num(x) for x in vals)
+            elif targets and re.search(r'(?:STOP|SL|حد\s*ضرر)', line, re.I):
+                break
 
-    if entry is None or sl is None or tp is None:
+    # Keep first 3 unique values.
+    seen = set(); clean = []
+    for x in targets:
+        if x not in seen:
+            clean.append(x); seen.add(x)
+    targets = clean[:3]
+
+    if sl is None or not targets:
         return None
+    if entries[0] is None and entries[1] is None:
+        # Some messages contain only one market entry without a number.
+        if re.search(r'(?:ENTRY\s*1|ورود\s*1).*MARKET|مارکت', t, re.I):
+            entries[0] = None
+            entry_types[0] = 'market'
+        else:
+            return None
 
-    # Reject malformed geometry before anything reaches Ourbit.
-    if direction == 'LONG' and not (sl < entry < tp):
-        return None
-    if direction == 'SHORT' and not (tp < entry < sl):
-        return None
-
-    return Signal(
-        direction=direction,
-        symbol=symbol,
-        leverage=leverage,
-        entry=entry,
-        stop_loss=sl,
-        take_profit=tp,
-        source_message_id=message_id,
-        raw_text=text,
-        confirmed=True,
-    )
+    return Signal(direction, symbol, lev, entries, entry_types, sl, targets, message_id, text)

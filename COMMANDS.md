@@ -1,20 +1,17 @@
-# Toobit → Ourbit CopyTrader
+# Channel follow-up commands
 
-This bot has no Otis signal source.
+The bot listens to the configured Telegram source and can act on management messages after a signal.
 
-It automatically watches `TOOBIT_SOURCE` and copies only confirmed Toobit trade messages.
+## Supported
 
-## Copied trade
+- Partial close: `30% close`, `30 درصد ببند`, `30 درصد سیو سود`
+- Half close: `نصف پوزیشن`, `50% position`
+- Full close: `close all`, `full close`, `بستن کامل`, `خروج کامل`
+- Break-even / risk-free: `risk free`, `break even`, `SL to entry`, `ریسک فری`
+- Explicit SL move: `SL to 123.45`, `SL 123.45`, `حد ضرر 123.45`
 
-- Direction: BUY/LONG or SELL/SHORT
-- Entry: Toobit's confirmed entry
-- TP: one full TP
-- SL: one full SL
-- No TP1/TP2/TP3
-- No break-even
+A management message without a symbol is only applied when exactly one active managed trade is unambiguous. If there are multiple active trades, the command is logged and ignored rather than guessing.
 
-## Testing
+## Safety
 
-Keep `DRY_RUN=true` first. A valid Toobit confirmation should produce a log similar to:
-
-`DRY RUN OK | source=TOOBIT | BTC_USDT LONG | entry=... TP=... SL=...`
+Keep `DRY_RUN=true` while testing. Do not commit credentials, `.env`, Telegram sessions, API secrets, or `otis_state.json`.
