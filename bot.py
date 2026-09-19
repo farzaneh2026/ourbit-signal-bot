@@ -13,6 +13,28 @@ from ourbit import OurbitClient, OurbitError, _find_records, _as_float
 from config import *
 
 
+# ============================================================
+# Telegram source
+# Read directly from environment so config.py does not matter.
+# ============================================================
+
+TG_SOURCE = os.getenv("TG_SOURCE", "").strip()
+
+if not TG_SOURCE:
+    raise SystemExit(
+        "TG_SOURCE is not set. "
+        "Add TG_SOURCE to Rawly Environment Variables."
+    )
+
+try:
+    TG_SOURCE_ID = int(TG_SOURCE)
+except (TypeError, ValueError):
+    raise SystemExit(
+        f"TG_SOURCE must be a numeric Telegram Chat ID. "
+        f"Current value: {TG_SOURCE!r}"
+    )
+
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s'
@@ -158,11 +180,6 @@ async def notify(text):
 
 
 def parse_signal_update(text):
-    """
-    Detect simple leverage-only follow-ups,
-    e.g. 'اهرم 10 وارد بشید'.
-    """
-
     m = re.search(
         r'(?:LEVERAGE|اهرم)\s*[:：]?\s*(\d+)\s*[xX×]?',
         text or '',
@@ -366,8 +383,10 @@ async def execute(sig: Signal):
         live = current_price(sig.symbol)
 
         log.info(
-            'DRY RUN OK | source=TG_SOURCE | %s | direction=%s | live=%s | '
-            'entries=%s | SL=%s | TP=%s | max_leverage=%s',
+            'DRY RUN OK | source=TG_SOURCE | chat_id=%s | '
+            '%s | direction=%s | live=%s | entries=%s | '
+            'SL=%s | TP=%s | max_leverage=%s',
+            TG_SOURCE_ID,
             sig.symbol,
             sig.direction,
             live,
@@ -411,9 +430,6 @@ async def execute(sig: Signal):
             else 'limit'
         )
 
-        # --------------------------------------------------------
-        # ENTRY 1 - MARKET
-        # --------------------------------------------------------
         if idx == 0 and etype == 'market':
             price_for_size = current_price(
                 sig.symbol
@@ -447,9 +463,6 @@ async def execute(sig: Signal):
 
             entry_price = price_for_size
 
-        # --------------------------------------------------------
-        # ENTRY 2 - LIMIT
-        # --------------------------------------------------------
         elif price is not None:
             qty, notional, _ = calc_volume(
                 price,
@@ -753,7 +766,6 @@ async def _process_signal_message(
                 lev,
                 event.id
             )
-
         else:
             log.warning(
                 'Signal parse failed '
@@ -808,9 +820,13 @@ async def _process_signal_message(
         )
 
 
+# ============================================================
+# Telegram handlers
+# ============================================================
+
 @client.on(
     events.NewMessage(
-        chats=int(TG_SOURCE)
+        chats=TG_SOURCE_ID
     )
 )
 async def on_message(event):
@@ -822,7 +838,7 @@ async def on_message(event):
 
 @client.on(
     events.MessageEdited(
-        chats=int(TG_SOURCE)
+        chats=TG_SOURCE_ID
     )
 )
 async def on_message_edited(event):
@@ -837,34 +853,20 @@ async def main():
 
     if not TG_API_ID or not TG_API_HASH:
         raise SystemExit(
-            'Set TG_API_ID and TG_API_HASH in Railway variables.'
+            'Set TG_API_ID and TG_API_HASH in Rawly Environment Variables.'
         )
 
     if not TG_SESSION:
         raise SystemExit(
             'TG_SESSION is not set. '
             'Generate a Telethon StringSession '
-            'and add it to Railway variables.'
-        )
-
-    if not TG_SOURCE:
-        raise SystemExit(
-            'TG_SOURCE is not set. '
-            'Set it to the Chat ID of the Toobit AI Trader chat.'
-        )
-
-    try:
-        source_chat_id = int(TG_SOURCE)
-    except (TypeError, ValueError):
-        raise SystemExit(
-            f'TG_SOURCE must be a numeric Telegram Chat ID. '
-            f'Current value: {TG_SOURCE!r}'
+            'and add it to Rawly Environment Variables.'
         )
 
     log.info(
-        'Toobit CopyTrader starting | source=TG_SOURCE | '
-        'chat_id=%s | DRY_RUN=%s | Ourbit=%s',
-        source_chat_id,
+        'Toobit CopyTrader starting | '
+        'source=TG_SOURCE | chat_id=%s | DRY_RUN=%s | Ourbit=%s',
+        TG_SOURCE_ID,
         DRY_RUN,
         OURBIT_API_BASE
     )
