@@ -15,10 +15,10 @@ from config import *
 
 # ============================================================
 # Telegram source
-# Read directly from environment so config.py does not matter.
 # ============================================================
 
 TG_SOURCE = os.getenv("TG_SOURCE", "").strip()
+TOOBIT_SOURCE_NAME = "Toobit AI Trader"
 
 if not TG_SOURCE:
     raise SystemExit(
@@ -57,16 +57,24 @@ state_path = Path(STATE_FILE)
 managed = {}
 
 
+# ============================================================
+# State
+# ============================================================
+
 def load_state():
     global managed
 
     try:
         if state_path.exists():
             managed = json.loads(
-                state_path.read_text(encoding='utf-8')
+                state_path.read_text(
+                    encoding='utf-8'
+                )
             )
     except Exception:
-        log.exception('Could not load state; starting clean')
+        log.exception(
+            'Could not load state; starting clean'
+        )
         managed = {}
 
 
@@ -81,8 +89,14 @@ def save_state():
             encoding='utf-8'
         )
     except Exception:
-        log.exception('Could not save state')
+        log.exception(
+            'Could not save state'
+        )
 
+
+# ============================================================
+# Helpers
+# ============================================================
 
 def extract_value(obj, *keys, default=None):
     if isinstance(obj, dict):
@@ -96,7 +110,11 @@ def extract_value(obj, *keys, default=None):
 def balance_usdt():
     data = exchange.asset_usdt()
 
-    raw = data.get('data', data) if isinstance(data, dict) else data
+    raw = (
+        data.get('data', data)
+        if isinstance(data, dict)
+        else data
+    )
 
     records = _find_records(raw)
 
@@ -110,7 +128,10 @@ def balance_usdt():
             'balance',
             'equity'
         ):
-            v = _as_float(a.get(key), 0)
+            v = _as_float(
+                a.get(key),
+                0
+            )
 
             if v > 0:
                 return v
@@ -123,7 +144,10 @@ def balance_usdt():
         cur = str(
             a.get(
                 'currency',
-                a.get('asset', '')
+                a.get(
+                    'asset',
+                    ''
+                )
             )
         ).upper()
 
@@ -135,24 +159,32 @@ def balance_usdt():
                 'balance',
                 'equity'
             ):
-                v = _as_float(a.get(key), 0)
+                v = _as_float(
+                    a.get(key),
+                    0
+                )
 
                 if v > 0:
                     return v
 
     raise OurbitError(
-        'Could not read USDT futures balance from Ourbit response'
+        'Could not read USDT futures balance '
+        'from Ourbit response'
     )
 
 
 def validate_levels(sig: Signal):
-    if sig.stop_loss is None or not sig.targets:
+    if (
+        sig.stop_loss is None
+        or not sig.targets
+    ):
         raise ValueError(
             'Signal must contain SL and at least one target'
         )
 
     targets = [
-        x for x in sig.targets
+        x
+        for x in sig.targets
         if x is not None
     ]
 
@@ -161,6 +193,7 @@ def validate_levels(sig: Signal):
             raise ValueError(
                 'Invalid LONG SL/TP geometry'
             )
+
     else:
         if sig.stop_loss <= max(targets):
             raise ValueError(
@@ -176,7 +209,9 @@ async def notify(text):
                 text
             )
         except Exception:
-            log.exception('Notification failed')
+            log.exception(
+                'Notification failed'
+            )
 
 
 def parse_signal_update(text):
@@ -189,11 +224,15 @@ def parse_signal_update(text):
     if not m:
         return None
 
-    return int(m.group(1))
+    return int(
+        m.group(1)
+    )
 
 
 def current_price(symbol):
-    ticker = exchange.ticker(symbol)
+    ticker = exchange.ticker(
+        symbol
+    )
 
     raw = (
         ticker.get('data', ticker)
@@ -202,7 +241,11 @@ def current_price(symbol):
     )
 
     if isinstance(raw, list):
-        raw = raw[0] if raw else {}
+        raw = (
+            raw[0]
+            if raw
+            else {}
+        )
 
     price = _as_float(
         extract_value(
@@ -224,18 +267,32 @@ def current_price(symbol):
 
 
 def position_records(symbol):
-    data = exchange.positions(symbol)
-    return _find_records(data)
+    data = exchange.positions(
+        symbol
+    )
+
+    return _find_records(
+        data
+    )
 
 
 def live_position(symbol, direction):
-    records = position_records(symbol)
+    records = position_records(
+        symbol
+    )
 
-    want = 1 if direction == 'LONG' else 3
+    want = (
+        1
+        if direction == 'LONG'
+        else 3
+    )
 
     for p in records:
         ps = str(
-            p.get('symbol', '')
+            p.get(
+                'symbol',
+                ''
+            )
         ).upper()
 
         if ps and ps != symbol.upper():
@@ -257,9 +314,12 @@ def live_position(symbol, direction):
             p.get('type')
         )
 
-        if vol > 0 and (
-            ptype is None
-            or int(float(ptype)) == want
+        if (
+            vol > 0
+            and (
+                ptype is None
+                or int(float(ptype)) == want
+            )
         ):
             return p
 
@@ -268,9 +328,13 @@ def live_position(symbol, direction):
 
 def stop_order_id(symbol):
     try:
-        data = exchange.stop_orders(symbol)
+        data = exchange.stop_orders(
+            symbol
+        )
 
-        for o in _find_records(data):
+        for o in _find_records(
+            data
+        ):
             oid = extract_value(
                 o,
                 'orderId',
@@ -283,7 +347,10 @@ def stop_order_id(symbol):
                 continue
 
             osym = str(
-                o.get('symbol', symbol)
+                o.get(
+                    'symbol',
+                    symbol
+                )
             ).upper()
 
             if osym == symbol.upper():
@@ -299,14 +366,26 @@ def stop_order_id(symbol):
 
 
 def close_side(direction):
-    return 4 if direction == 'LONG' else 2
+    return (
+        4
+        if direction == 'LONG'
+        else 2
+    )
 
 
 def open_side(direction):
-    return 1 if direction == 'LONG' else 3
+    return (
+        1
+        if direction == 'LONG'
+        else 3
+    )
 
 
-def target_reached(direction, price, target):
+def target_reached(
+    direction,
+    price,
+    target
+):
     return (
         price >= target
         if direction == 'LONG'
@@ -314,8 +393,16 @@ def target_reached(direction, price, target):
     )
 
 
-def calc_volume(price, leverage, equity, contract):
-    margin = equity * MAX_MARGIN_PCT_PER_ENTRY
+def calc_volume(
+    price,
+    leverage,
+    equity,
+    contract
+):
+    margin = (
+        equity
+        * MAX_MARGIN_PCT_PER_ENTRY
+    )
 
     qty, notional, c = exchange.size_from_margin(
         price,
@@ -332,10 +419,20 @@ def calc_volume(price, leverage, equity, contract):
     return qty, notional, c
 
 
-async def execute(sig: Signal):
-    validate_levels(sig)
+# ============================================================
+# Execute signal
+# ============================================================
 
-    lev = sig.leverage or DEFAULT_LEVERAGE
+async def execute(sig: Signal):
+
+    validate_levels(
+        sig
+    )
+
+    lev = (
+        sig.leverage
+        or DEFAULT_LEVERAGE
+    )
 
     if lev <= 0:
         raise ValueError(
@@ -345,13 +442,23 @@ async def execute(sig: Signal):
     sig.symbol = (
         sig.symbol
         .upper()
-        .replace('-', '_')
-        .replace('/', '_')
+        .replace(
+            '-',
+            '_'
+        )
+        .replace(
+            '/',
+            '_'
+        )
     )
 
-    contract = exchange.contract_for(sig.symbol)
+    contract = exchange.contract_for(
+        sig.symbol
+    )
 
-    meta = exchange.normalize_contract(contract)
+    meta = exchange.normalize_contract(
+        contract
+    )
 
     lev = min(
         lev,
@@ -359,7 +466,8 @@ async def execute(sig: Signal):
     )
 
     log.info(
-        'SIGNAL %s %s lev=%sx entries=%s SL=%s TP=%s',
+        'SIGNAL %s %s lev=%sx entries=%s '
+        'SL=%s TP=%s',
         sig.direction,
         sig.symbol,
         lev,
@@ -375,17 +483,22 @@ async def execute(sig: Signal):
         f'TP {sig.targets}'
     )
 
-    # ============================================================
+    # ========================================================
     # DRY RUN
-    # ============================================================
+    # ========================================================
 
     if DRY_RUN:
-        live = current_price(sig.symbol)
+
+        live = current_price(
+            sig.symbol
+        )
 
         log.info(
-            'DRY RUN OK | source=TG_SOURCE | chat_id=%s | '
-            '%s | direction=%s | live=%s | entries=%s | '
-            'SL=%s | TP=%s | max_leverage=%s',
+            'DRY RUN OK | source=%s | chat_id=%s | '
+            '%s | direction=%s | live=%s | '
+            'entries=%s | SL=%s | TP=%s | '
+            'max_leverage=%s',
+            TOOBIT_SOURCE_NAME,
             TG_SOURCE_ID,
             sig.symbol,
             sig.direction,
@@ -398,9 +511,9 @@ async def execute(sig: Signal):
 
         return
 
-    # ============================================================
+    # ========================================================
     # LIVE TRADING
-    # ============================================================
+    # ========================================================
 
     equity = balance_usdt()
 
@@ -422,15 +535,22 @@ async def execute(sig: Signal):
             len(sig.entries)
         )
     ):
+
         price = sig.entries[idx]
 
         etype = (
             sig.entry_types[idx]
-            if idx < len(sig.entry_types)
+            if idx < len(
+                sig.entry_types
+            )
             else 'limit'
         )
 
-        if idx == 0 and etype == 'market':
+        if (
+            idx == 0
+            and etype == 'market'
+        ):
+
             price_for_size = current_price(
                 sig.symbol
             )
@@ -444,7 +564,9 @@ async def execute(sig: Signal):
 
             res = exchange.submit(
                 sig.symbol,
-                open_side(sig.direction),
+                open_side(
+                    sig.direction
+                ),
                 qty,
                 lev,
                 5,
@@ -461,9 +583,12 @@ async def execute(sig: Signal):
                 res
             )
 
-            entry_price = price_for_size
+            entry_price = (
+                price_for_size
+            )
 
         elif price is not None:
+
             qty, notional, _ = calc_volume(
                 price,
                 lev,
@@ -473,7 +598,9 @@ async def execute(sig: Signal):
 
             res = exchange.submit(
                 sig.symbol,
-                open_side(sig.direction),
+                open_side(
+                    sig.direction
+                ),
                 qty,
                 lev,
                 1,
@@ -481,8 +608,9 @@ async def execute(sig: Signal):
             )
 
             log.info(
-                'LIMIT ENTRY %s price=%s qty=%s '
-                'notional=%s response=%s',
+                'LIMIT ENTRY %s price=%s '
+                'qty=%s notional=%s '
+                'response=%s',
                 sig.symbol,
                 price,
                 qty,
@@ -514,7 +642,8 @@ async def execute(sig: Signal):
                 False
             ],
             'be_done': False,
-            'created_message_id': sig.source_message_id,
+            'created_message_id':
+                sig.source_message_id,
         }
 
         save_state()
@@ -525,7 +654,14 @@ async def execute(sig: Signal):
     )
 
 
-async def manage_trade(key, trade):
+# ============================================================
+# Trade manager
+# ============================================================
+
+async def manage_trade(
+    key,
+    trade
+):
     symbol = trade['symbol']
     direction = trade['direction']
 
@@ -534,7 +670,9 @@ async def manage_trade(key, trade):
         []
     )[:3]
 
-    price = current_price(symbol)
+    price = current_price(
+        symbol
+    )
 
     pos = live_position(
         symbol,
@@ -560,11 +698,15 @@ async def manage_trade(key, trade):
     if hold <= 0:
         return
 
-    if not trade.get('initial_hold'):
+    if not trade.get(
+        'initial_hold'
+    ):
         trade['initial_hold'] = hold
         save_state()
 
-    for i, target in enumerate(targets):
+    for i, target in enumerate(
+        targets
+    ):
 
         if (
             trade['tp_done'][i]
@@ -601,26 +743,31 @@ async def manage_trade(key, trade):
         )
 
         if i == 0:
+
             close_qty = max(
                 1,
                 int(
                     round(
-                        base * TP1_PCT
+                        base
+                        * TP1_PCT
                     )
                 )
             )
 
         elif i == 1:
+
             close_qty = max(
                 1,
                 int(
                     round(
-                        base * TP2_PCT
+                        base
+                        * TP2_PCT
                     )
                 )
             )
 
         else:
+
             close_qty = remaining
 
         close_qty = min(
@@ -630,7 +777,9 @@ async def manage_trade(key, trade):
 
         res = exchange.submit(
             symbol,
-            close_side(direction),
+            close_side(
+                direction
+            ),
             close_qty,
             trade['leverage'],
             5,
@@ -638,8 +787,9 @@ async def manage_trade(key, trade):
         )
 
         log.info(
-            'TP%d HIT %s price=%s target=%s '
-            'close_qty=%s response=%s',
+            'TP%d HIT %s price=%s '
+            'target=%s close_qty=%s '
+            'response=%s',
             i + 1,
             symbol,
             price,
@@ -651,10 +801,19 @@ async def manage_trade(key, trade):
         trade['tp_done'][i] = True
         save_state()
 
-        if i == 0 and not trade.get('be_done'):
-            sid = stop_order_id(symbol)
+        if (
+            i == 0
+            and not trade.get(
+                'be_done'
+            )
+        ):
+
+            sid = stop_order_id(
+                symbol
+            )
 
             if sid is not None:
+
                 try:
                     exchange.change_stop(
                         sid,
@@ -672,22 +831,25 @@ async def manage_trade(key, trade):
 
                 except Exception:
                     log.exception(
-                        'Failed to move SL to break-even '
-                        'for %s',
+                        'Failed to move SL '
+                        'to break-even for %s',
                         symbol
                     )
 
             else:
+
                 log.warning(
-                    'TP1 hit but no stop order id was found '
-                    'for %s; SL was NOT changed',
+                    'TP1 hit but no stop order id '
+                    'was found for %s; SL was NOT changed',
                     symbol
                 )
 
             trade['be_done'] = True
             save_state()
 
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(
+            0.5
+        )
 
         pos = live_position(
             symbol,
@@ -699,24 +861,33 @@ async def manage_trade(key, trade):
 
 
 async def manager_loop():
+
     while True:
+
         try:
+
             if not DRY_RUN:
+
                 for key, trade in list(
                     managed.items()
                 ):
+
                     try:
+
                         await manage_trade(
                             key,
                             trade
                         )
+
                     except Exception:
+
                         log.exception(
                             'Position manager failed for %s',
                             key
                         )
 
         except Exception:
+
             log.exception(
                 'Position manager loop error'
             )
@@ -729,10 +900,15 @@ async def manager_loop():
         )
 
 
+# ============================================================
+# Process Telegram signal
+# ============================================================
+
 async def _process_signal_message(
     event,
     edited=False
 ):
+
     text = event.raw_text or ''
 
     kind = (
@@ -742,8 +918,10 @@ async def _process_signal_message(
     )
 
     log.info(
-        'TOOBIT %s chat_id=%s message=%s text=%r',
+        'TOOBIT %s | source=%s | chat_id=%s | '
+        'message=%s | text=%r',
         kind,
+        TOOBIT_SOURCE_NAME,
         event.chat_id,
         event.id,
         text
@@ -755,18 +933,22 @@ async def _process_signal_message(
     )
 
     if not sig:
+
         lev = parse_signal_update(
             text
         )
 
         if lev:
+
             log.info(
                 'Leverage update detected: '
                 '%sx | message=%s',
                 lev,
                 event.id
             )
+
         else:
+
             log.warning(
                 'Signal parse failed '
                 'chat_id=%s message=%s',
@@ -783,13 +965,17 @@ async def _process_signal_message(
     )
 
     if key in seen:
+
         log.info(
             'Duplicate signal ignored: %s',
             key
         )
+
         return
 
-    seen.add(key)
+    seen.add(
+        key
+    )
 
     log.info(
         'TOOBIT PARSED signal '
@@ -807,9 +993,13 @@ async def _process_signal_message(
     )
 
     try:
-        await execute(sig)
+
+        await execute(
+            sig
+        )
 
     except Exception as e:
+
         log.exception(
             'Signal execution failed'
         )
@@ -822,41 +1012,99 @@ async def _process_signal_message(
 
 # ============================================================
 # Telegram handlers
+# IMPORTANT:
+# Temporarily listen to ALL incoming messages.
+# This lets us discover the REAL chat_id of
+# "Toobit AI Trader".
 # ============================================================
 
 @client.on(
-    events.NewMessage(
-        chats=TG_SOURCE_ID
-    )
+    events.NewMessage
 )
 async def on_message(event):
-    await _process_signal_message(
-        event,
-        edited=False
+
+    chat_id = event.chat_id
+    text = event.raw_text or ''
+
+    log.info(
+        'TELEGRAM MESSAGE RECEIVED | '
+        'source=%s | chat_id=%s | '
+        'message_id=%s | text=%r',
+        TOOBIT_SOURCE_NAME,
+        chat_id,
+        event.id,
+        text
     )
+
+    if chat_id == TG_SOURCE_ID:
+
+        await _process_signal_message(
+            event,
+            edited=False
+        )
+
+    else:
+
+        log.info(
+            'IGNORED MESSAGE | expected_chat_id=%s | '
+            'received_chat_id=%s',
+            TG_SOURCE_ID,
+            chat_id
+        )
 
 
 @client.on(
-    events.MessageEdited(
-        chats=TG_SOURCE_ID
-    )
+    events.MessageEdited
 )
 async def on_message_edited(event):
-    await _process_signal_message(
-        event,
-        edited=True
+
+    chat_id = event.chat_id
+    text = event.raw_text or ''
+
+    log.info(
+        'TELEGRAM EDITED MESSAGE RECEIVED | '
+        'source=%s | chat_id=%s | '
+        'message_id=%s | text=%r',
+        TOOBIT_SOURCE_NAME,
+        chat_id,
+        event.id,
+        text
     )
 
+    if chat_id == TG_SOURCE_ID:
+
+        await _process_signal_message(
+            event,
+            edited=True
+        )
+
+    else:
+
+        log.info(
+            'IGNORED EDITED MESSAGE | expected_chat_id=%s | '
+            'received_chat_id=%s',
+            TG_SOURCE_ID,
+            chat_id
+        )
+
+
+# ============================================================
+# Main
+# ============================================================
 
 async def main():
+
     load_state()
 
     if not TG_API_ID or not TG_API_HASH:
+
         raise SystemExit(
-            'Set TG_API_ID and TG_API_HASH in Rawly Environment Variables.'
+            'Set TG_API_ID and TG_API_HASH '
+            'in Rawly Environment Variables.'
         )
 
     if not TG_SESSION:
+
         raise SystemExit(
             'TG_SESSION is not set. '
             'Generate a Telethon StringSession '
@@ -865,7 +1113,9 @@ async def main():
 
     log.info(
         'Toobit CopyTrader starting | '
-        'source=TG_SOURCE | chat_id=%s | DRY_RUN=%s | Ourbit=%s',
+        'source=%s | chat_id=%s | DRY_RUN=%s | '
+        'Ourbit=%s',
+        TOOBIT_SOURCE_NAME,
         TG_SOURCE_ID,
         DRY_RUN,
         OURBIT_API_BASE
@@ -896,11 +1146,15 @@ async def main():
     )
 
     try:
+
         await client.run_until_disconnected()
 
     finally:
+
         manager.cancel()
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    asyncio.run(
+        main()
+    )
