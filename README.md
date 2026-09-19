@@ -1,29 +1,26 @@
-# Otis CopyTrader → Ourbit Futures v2
+# Toobit → Ourbit CopyTrader
 
-A separate project from the existing Toobit bot.
+This project no longer listens to Otis signals.
 
-## What was fixed in v2
-- Uses the official Ourbit V1 contract endpoints confirmed by the official Postman collection.
-- Reads contract metadata before sizing so `contractSize`, minimum volume, volume step, minimum notional and maximum leverage can be respected when those fields are returned by Ourbit.
-- Market Entry 1 + Limit Entry 2.
-- LONG and SHORT.
-- Signal leverage, capped by the contract's reported maximum leverage.
-- Protective SL is attached to the opening market order. TP is deliberately NOT attached to the opening order because that could close the whole position instead of doing partial TP.
-- TP1/TP2/TP3 are managed as partial market closes using the live remaining position size.
-- After TP1, the bot attempts to move the existing exchange stop order to Entry (break-even). If the stop order cannot be found, it logs a warning and does not pretend the move succeeded.
-- State is persisted in `otis_state.json`.
-- Starts with `DRY_RUN=true`.
+It listens to the Telegram chat/channel where the **Toobit AI Trader** sends its confirmed trade messages and copies those trades to **Ourbit Futures**.
 
-## Important safety behavior
-Do not switch `DRY_RUN=false` until the Railway logs show that Telegram parsing, Ourbit public contract/ticker calls and private API authentication all work correctly.
+## Copy flow
 
-The official Ourbit V1 collection confirms the futures endpoints for contract detail, assets, positions, open orders, leverage, order submission, plan orders and stop orders. citeturn7view0turn8view0turn9view0
+1. Toobit scans and creates a signal.
+2. The user confirms the trade in the Toobit bot.
+3. Toobit sends its confirmed execution message containing Symbol, Signal, Entry, TP and SL.
+4. This copier reads that confirmed message.
+5. The same direction, entry, TP and SL are sent to Ourbit.
+6. The Ourbit copy uses **one entry + one full TP + one full SL**. No TP1/TP2/TP3 and no break-even logic.
 
-## Required Railway Variables
+Pending Toobit signals are intentionally ignored. This prevents an unapproved/rejected Toobit signal from opening a position on Ourbit.
+
+## Required Rawly variables
+
 - `TG_API_ID`
 - `TG_API_HASH`
 - `TG_SESSION`
-- `TG_SOURCE=-1003980416205`
+- `TOOBIT_SOURCE` — Telegram chat ID/channel ID or public username where the Toobit bot posts its confirmed trade messages
 - `OURBIT_API_KEY`
 - `OURBIT_API_SECRET`
 
@@ -33,30 +30,9 @@ Recommended first test:
 - `DEFAULT_LEVERAGE=10`
 - `POSITION_MODE=2`
 
-Never put API Secret or Telegram session in the source code or ZIP.
+## Important
 
-
-## Telegram / Railway deployment
-
-This version uses Telethon `StringSession` directly from the `TG_SESSION`
-Railway environment variable. Railway therefore does not need a local
-`.session` file and should not ask for a phone number at runtime.
-
-Generate the StringSession once on a trusted local machine with:
-
-```bash
-python create_session.py
-```
-
-Then put the printed value in Railway as `TG_SESSION`.
-
-Required Telegram variables:
-- `TG_API_ID`
-- `TG_API_HASH`
-- `TG_SESSION`
-- `TG_SOURCE=-1003980416205`
-
-Security:
-- Never commit `.env`, Telegram StringSession values, Telegram session files,
-  `OURBIT_API_SECRET`, API keys, or other credentials to GitHub.
-- `DRY_RUN=true` remains the safe default and must stay enabled during testing.
+- This project is separate from the Toobit trader itself; it only consumes its confirmed Telegram messages.
+- No Otis source/channel/parser is used.
+- Keep `DRY_RUN=true` until the logs show that the Toobit message is parsed correctly and the Ourbit public/private API tests are successful.
+- Never put API secrets or Telegram StringSession values in the ZIP or GitHub.
