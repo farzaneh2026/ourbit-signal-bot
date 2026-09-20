@@ -17,21 +17,26 @@ from config import *
 # Telegram source
 # ============================================================
 
-TG_SOURCE = os.getenv("TG_SOURCE", "").strip()
 TOOBIT_SOURCE_NAME = "Toobit AI Trader"
+# Prefer the dedicated Toobit source variable. Keep TG_SOURCE as a
+# backwards-compatible fallback so the existing deployment does not break.
+TOOBIT_SOURCE_ID_RAW = (
+    os.getenv("TOOBIT_SOURCE", "").strip()
+    or os.getenv("TG_SOURCE", "").strip()
+)
 
-if not TG_SOURCE:
+if not TOOBIT_SOURCE_ID_RAW:
     raise SystemExit(
-        "TG_SOURCE is not set. "
-        "Add TG_SOURCE to Rawly Environment Variables."
+        "TOOBIT_SOURCE is not set. "
+        "Add TOOBIT_SOURCE to Rawly Environment Variables."
     )
 
 try:
-    TG_SOURCE_ID = int(TG_SOURCE)
+    TG_SOURCE_ID = int(TOOBIT_SOURCE_ID_RAW)
 except (TypeError, ValueError):
     raise SystemExit(
-        f"TG_SOURCE must be a numeric Telegram Chat ID. "
-        f"Current value: {TG_SOURCE!r}"
+        f"TOOBIT_SOURCE must be a numeric Telegram Chat ID. "
+        f"Current value: {TOOBIT_SOURCE_ID_RAW!r}"
     )
 
 
@@ -249,8 +254,8 @@ CONFIRMATION_PATTERNS = (
     r'\bEXECUTED\s+CONFIRMED\b',
     r'تایید\s*شد',
     r'تأیید\s*شد',
-    r'معامله\s*تایید\s*شد',
-    r'معامله\s*تأیید\s*شد',
+    r'معامله\s*تایید(?:\s+و\s+باز)?\s*شد',
+    r'معامله\s*تأیید(?:\s+و\s+باز)?\s*شد',
 )
 
 def is_confirmed_signal_text(text: str) -> bool:

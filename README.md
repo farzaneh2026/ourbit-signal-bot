@@ -65,8 +65,8 @@ Security:
 ## Toobit confirmation gate
 
 The CopyTrader does **not** execute the initial/unconfirmed signal. It listens to
-`TG_SOURCE=8863078191` and executes only when the Toobit message itself contains
-an explicit confirmation marker (for example `تأیید شد`, `تایید شد`, or
+`TOOBIT_SOURCE=8863078191` and executes only when the Toobit message itself contains
+an explicit confirmation marker (for example `تأیید شد`, `تایید شد`, `معامله تأیید و باز شد`, or
 `TRADE CONFIRMED`) and the complete Entry/SL/TP data is present.
 
 A Telegram inline-button click is not directly visible to a separate Telegram
