@@ -50,7 +50,7 @@ class OurbitClient:
         self.key = OURBIT_API_KEY
         self.secret = OURBIT_API_SECRET
         self.s = requests.Session()
-        self.s.headers.update({'User-Agent': 'otis-copytrader/2.0'})
+        self.s.headers.update({'User-Agent': 'toobit-copytrader/2.0'})
 
     def _require_keys(self):
         if not self.key or not self.secret:
@@ -157,7 +157,7 @@ class OurbitClient:
             'type': int(order_type),
             'openType': int(MARGIN_MODE),
             'positionMode': int(POSITION_MODE),
-            'externalOid': external_oid or ('otis-' + uuid.uuid4().hex[:18]),
+            'externalOid': external_oid or ('toobit-' + uuid.uuid4().hex[:18]),
         }
         if position_id is not None:
             p['positionId'] = int(position_id)

@@ -1,6 +1,6 @@
 # Toobit CopyTrader → Ourbit Futures v2
 
-A separate project from the existing Toobit bot.
+This CopyTrader is connected to the user's Toobit AI Trader source and is separate from the old Otis flow.
 
 ## What was fixed in v2
 - Uses the official Ourbit V1 contract endpoints confirmed by the official Postman collection.
@@ -11,7 +11,7 @@ A separate project from the existing Toobit bot.
 - Protective SL is attached to the opening market order. TP is deliberately NOT attached to the opening order because that could close the whole position instead of doing partial TP.
 - TP1/TP2/TP3 are managed as partial market closes using the live remaining position size.
 - After TP1, the bot attempts to move the existing exchange stop order to Entry (break-even). If the stop order cannot be found, it logs a warning and does not pretend the move succeeded.
-- State is persisted in `otis_state.json`.
+- State is persisted in `toobit_state.json`.
 - Starts with `DRY_RUN=true`.
 
 ## Important safety behavior
@@ -60,3 +60,20 @@ Security:
 - Never commit `.env`, Telegram StringSession values, Telegram session files,
   `OURBIT_API_SECRET`, API keys, or other credentials to GitHub.
 - `DRY_RUN=true` remains the safe default and must stay enabled during testing.
+
+
+## Toobit confirmation gate
+
+The CopyTrader does **not** execute the initial/unconfirmed signal. It listens to
+`TG_SOURCE=8863078191` and executes only when the Toobit message itself contains
+an explicit confirmation marker (for example `تأیید شد`, `تایید شد`, or
+`TRADE CONFIRMED`) and the complete Entry/SL/TP data is present.
+
+A Telegram inline-button click is not directly visible to a separate Telegram
+user session. Therefore Toobit must publish or edit the source message with an
+explicit confirmation status after the user presses **تأیید معامله**. The
+CopyTrader then processes that confirmed message.
+
+The Ourbit balance is checked after confirmation and before any order. If the
+available USDT is insufficient, the Ourbit order is blocked and the reason is
+logged/notified. `DRY_RUN=true` remains unchanged.

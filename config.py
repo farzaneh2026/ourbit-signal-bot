@@ -24,7 +24,7 @@ TP2_PCT = float(os.getenv('TP2_PCT', '0.30'))
 TP3_PCT = float(os.getenv('TP3_PCT', '0.40'))
 POLL_SECONDS = int(os.getenv('POLL_SECONDS', '3'))
 REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', '15'))
-STATE_FILE = os.getenv('STATE_FILE', 'otis_state.json')
+STATE_FILE = os.getenv('STATE_FILE', 'toobit_state.json')
 
 if MAX_MARGIN_PCT_PER_ENTRY <= 0 or MAX_MARGIN_PCT_PER_ENTRY > 0.06:
     raise ValueError('MAX_MARGIN_PCT_PER_ENTRY must be >0 and <= 0.06')

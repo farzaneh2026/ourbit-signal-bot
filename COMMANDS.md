@@ -14,4 +14,4 @@ A management message without a symbol is only applied when exactly one active ma
 
 ## Safety
 
-Keep `DRY_RUN=true` while testing. Do not commit credentials, `.env`, Telegram sessions, API secrets, or `otis_state.json`.
+Keep `DRY_RUN=true` while testing. Do not commit credentials, `.env`, Telegram sessions, API secrets, or `toobit_state.json`.

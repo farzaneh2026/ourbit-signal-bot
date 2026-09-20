@@ -226,6 +226,50 @@ def parse_signal_update(text):
     return int(m.group(1))
 
 
+
+# ============================================================
+# Toobit confirmation gate
+# ============================================================
+# IMPORTANT:
+# A Telegram inline-button click is delivered to the Toobit bot itself.
+# CopyTrader (running as a Telegram user session) cannot directly receive
+# that callback.  Therefore this project NEVER executes on the initial
+# signal message.  It executes only when Toobit publishes/edits the signal
+# with an explicit confirmation marker.
+#
+# Keep this list deliberately strict: the initial signal may contain
+# generic "confirm" instructions or a green emoji, so those are NOT enough.
+
+CONFIRMATION_PATTERNS = (
+    r'\bTRADE\s+CONFIRMED\b',
+    r'\bSIGNAL\s+CONFIRMED\b',
+    r'\bCONFIRMED\s+TRADE\b',
+    r'\bCONFIRMED\b',
+    r'\bAPPROVED\b',
+    r'\bEXECUTED\s+CONFIRMED\b',
+    r'تایید\s*شد',
+    r'تأیید\s*شد',
+    r'معامله\s*تایید\s*شد',
+    r'معامله\s*تأیید\s*شد',
+)
+
+def is_confirmed_signal_text(text: str) -> bool:
+    """Return True only for an explicit Toobit confirmation marker."""
+    if not text:
+        return False
+    t = _normalize_confirmation_text(text)
+    return any(re.search(p, t, re.I) for p in CONFIRMATION_PATTERNS)
+
+def _normalize_confirmation_text(text: str) -> str:
+    return (
+        text.replace('ي', 'ی')
+            .replace('ى', 'ی')
+            .replace('ك', 'ک')
+            .replace('ة', 'ه')
+            .replace('ۀ', 'ه')
+            .replace('‌', ' ')
+    )
+
 def current_price(symbol):
     ticker = exchange.ticker(
         symbol
@@ -469,6 +513,63 @@ async def execute(sig: Signal):
     )
 
     # ========================================================
+    # OURBIT BALANCE PREFLIGHT
+    # ========================================================
+    # This check is performed only after the Toobit confirmation gate.
+    # It is also performed in DRY_RUN so the connection can be tested
+    # without placing a real order.
+    try:
+        equity = balance_usdt()
+    except Exception as e:
+        raise OurbitError(
+            f"Ourbit balance check failed; trade blocked: {e}"
+        )
+
+    if equity <= 0:
+        raise OurbitError(
+            f"Ourbit available USDT is {equity:.8f}; "
+            "trade blocked because balance is insufficient."
+        )
+
+    # Estimate the margin needed for the first entry using the same
+    # contract sizing logic used by live trading. This catches minimum
+    # quantity/notional requirements before any order is submitted.
+    first_entry = sig.entries[0] if sig.entries else None
+    first_type = sig.entry_types[0] if sig.entry_types else "limit"
+    sizing_price = (
+        current_price(sig.symbol)
+        if first_type == "market" or first_entry is None
+        else first_entry
+    )
+
+    qty_check, notional_check, _ = calc_volume(
+        sizing_price,
+        lev,
+        equity,
+        contract
+    )
+
+    required_margin = notional_check / max(1, lev)
+
+    if required_margin > equity + 1e-12:
+        raise OurbitError(
+            f"Ourbit balance insufficient: available={equity:.8f} USDT, "
+            f"required_margin≈{required_margin:.8f} USDT, "
+            f"symbol={sig.symbol}"
+        )
+
+    log.info(
+        "OURBIT BALANCE OK | available=%.8f USDT | "
+        "required_margin≈%.8f USDT | first_qty=%s | "
+        "first_notional≈%.8f | symbol=%s",
+        equity,
+        required_margin,
+        qty_check,
+        notional_check,
+        sig.symbol
+    )
+
+    # ========================================================
     # DRY RUN
     # ========================================================
 
@@ -482,7 +583,8 @@ async def execute(sig: Signal):
             "DRY RUN OK | source=%s | chat_id=%s | "
             "%s | direction=%s | live=%s | "
             "entries=%s | SL=%s | TP=%s | "
-            "max_leverage=%s",
+            "balance=%.8f | required_margin≈%.8f | "
+            "max_leverage=%s | CONFIRMED=YES",
             TOOBIT_SOURCE_NAME,
             TG_SOURCE_ID,
             sig.symbol,
@@ -491,6 +593,8 @@ async def execute(sig: Signal):
             sig.entries,
             sig.stop_loss,
             sig.targets,
+            equity,
+            required_margin,
             meta["max_leverage"]
         )
 
@@ -499,8 +603,6 @@ async def execute(sig: Signal):
     # ========================================================
     # LIVE TRADING
     # ========================================================
-
-    equity = balance_usdt()
 
     try:
         exchange.change_leverage(
@@ -870,7 +972,6 @@ async def _process_signal_message(
     event,
     edited=False
 ):
-
     text = event.raw_text or ""
 
     kind = (
@@ -889,35 +990,48 @@ async def _process_signal_message(
         text
     )
 
+    # --------------------------------------------------------
+    # HARD CONFIRMATION GATE
+    # --------------------------------------------------------
+    # Never execute the first/unconfirmed signal.
+    # A confirmation must be explicitly published by Toobit.
+    confirmed = is_confirmed_signal_text(text)
+
+    if not confirmed:
+        log.info(
+            "UNCONFIRMED signal ignored | source=%s | "
+            "chat_id=%s | message=%s",
+            TOOBIT_SOURCE_NAME,
+            event.chat_id,
+            event.id
+        )
+        return
+
+    log.info(
+        "TOOBIT CONFIRMED | source=%s | chat_id=%s | message=%s",
+        TOOBIT_SOURCE_NAME,
+        event.chat_id,
+        event.id
+    )
+
     sig = parse_signal(
         text,
         event.id
     )
 
     if not sig:
-
-        lev = parse_signal_update(
-            text
+        # Some Toobit confirmation messages may be short and contain only
+        # confirmation status. In that case, the original signal must be
+        # available in the edited message itself for safe execution.
+        log.warning(
+            "Confirmed Toobit message does not contain a complete signal; "
+            "Ourbit execution blocked | message=%s",
+            event.id
         )
-
-        if lev:
-
-            log.info(
-                "Leverage update detected: "
-                "%sx | message=%s",
-                lev,
-                event.id
-            )
-
-        else:
-
-            log.warning(
-                "Signal parse failed "
-                "chat_id=%s message=%s",
-                event.chat_id,
-                event.id
-            )
-
+        await notify(
+            f"⚠️ Toobit confirmed, but CopyTrader blocked execution: "
+            f"complete signal data was not present in message {event.id}."
+        )
         return
 
     key = (
@@ -927,18 +1041,16 @@ async def _process_signal_message(
     )
 
     if key in seen:
-
         log.info(
-            "Duplicate signal ignored: %s",
+            "Duplicate confirmed signal ignored: %s",
             key
         )
-
         return
 
     seen.add(key)
 
     log.info(
-        "TOOBIT PARSED signal "
+        "TOOBIT CONFIRMED PARSED signal "
         "direction=%s symbol=%s leverage=%s "
         "entries=%s entry_types=%s SL=%s TP=%s "
         "message=%s",
@@ -953,17 +1065,15 @@ async def _process_signal_message(
     )
 
     try:
-
         await execute(sig)
 
     except Exception as e:
-
         log.exception(
-            "Signal execution failed"
+            "Confirmed signal execution failed"
         )
 
         await notify(
-            f"❌ Toobit execution failed: "
+            f"❌ Confirmed Toobit signal was NOT executed on Ourbit: "
             f"{sig.symbol} {sig.direction}\n{e}"
         )
 
