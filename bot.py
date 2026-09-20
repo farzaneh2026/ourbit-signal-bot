@@ -520,25 +520,31 @@ async def execute(sig: Signal):
     # ========================================================
     # OURBIT BALANCE PREFLIGHT
     # ========================================================
-    # This check is performed only after the Toobit confirmation gate.
-    # It is also performed in DRY_RUN so the connection can be tested
-    # without placing a real order.
+    # Ourbit's current API Read permission does not include Asset/Balance
+    # reads. Calling /private/account/asset/USDT therefore returns code 701.
+    # A confirmed trade must not be blocked by that unsupported preflight.
+    # Use a conservative explicit fixed margin for sizing when balance cannot
+    # be read. The value is controlled by FALLBACK_MARGIN_USDT.
     try:
         equity = balance_usdt()
+        sizing_margin = equity * MAX_MARGIN_PCT_PER_ENTRY
+        balance_source = "api"
     except Exception as e:
-        raise OurbitError(
-            f"Ourbit balance check failed; trade blocked: {e}"
+        equity = None
+        sizing_margin = FALLBACK_MARGIN_USDT
+        balance_source = "fallback"
+        log.warning(
+            "OURBIT BALANCE READ unavailable; continuing with fallback sizing "
+            "| margin=%.8f USDT | error=%s",
+            sizing_margin,
+            e,
         )
 
-    if equity <= 0:
+    if sizing_margin <= 0:
         raise OurbitError(
-            f"Ourbit available USDT is {equity:.8f}; "
-            "trade blocked because balance is insufficient."
+            f"Invalid sizing margin: {sizing_margin:.8f} USDT"
         )
 
-    # Estimate the margin needed for the first entry using the same
-    # contract sizing logic used by live trading. This catches minimum
-    # quantity/notional requirements before any order is submitted.
     first_entry = sig.entries[0] if sig.entries else None
     first_type = sig.entry_types[0] if sig.entry_types else "limit"
     sizing_price = (
@@ -547,28 +553,22 @@ async def execute(sig: Signal):
         else first_entry
     )
 
-    qty_check, notional_check, _ = calc_volume(
+    # Size directly from the known margin budget. This avoids requiring an
+    # Asset permission that Ourbit's current Read-only API does not expose.
+    qty_check, notional_check, _ = exchange.size_from_margin(
         sizing_price,
         lev,
-        equity,
+        sizing_margin,
         contract
     )
 
-    required_margin = notional_check / max(1, lev)
-
-    if required_margin > equity + 1e-12:
-        raise OurbitError(
-            f"Ourbit balance insufficient: available={equity:.8f} USDT, "
-            f"required_margin≈{required_margin:.8f} USDT, "
-            f"symbol={sig.symbol}"
-        )
+    sizing_equity = sizing_margin / MAX_MARGIN_PCT_PER_ENTRY
 
     log.info(
-        "OURBIT BALANCE OK | available=%.8f USDT | "
-        "required_margin≈%.8f USDT | first_qty=%s | "
+        "OURBIT SIZING OK | source=%s | margin≈%.8f USDT | first_qty=%s | "
         "first_notional≈%.8f | symbol=%s",
-        equity,
-        required_margin,
+        balance_source,
+        sizing_margin,
         qty_check,
         notional_check,
         sig.symbol

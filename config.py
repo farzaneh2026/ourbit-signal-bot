@@ -14,6 +14,10 @@ OURBIT_API_SECRET = os.getenv('OURBIT_API_SECRET', '')
 DRY_RUN = os.getenv('DRY_RUN', 'true').lower() in ('1', 'true', 'yes', 'on')
 
 MAX_MARGIN_PCT_PER_ENTRY = float(os.getenv('MAX_MARGIN_PCT_PER_ENTRY', '0.06'))
+# Ourbit's current Read API does not grant Asset/Balance reads. When balance
+# cannot be queried, use this explicit fixed margin for sizing instead of
+# blocking an otherwise confirmed trade. Keep it conservative and tune via env.
+FALLBACK_MARGIN_USDT = float(os.getenv('FALLBACK_MARGIN_USDT', '1.0'))
 MAX_ENTRIES = int(os.getenv('MAX_ENTRIES', '2'))
 DEFAULT_LEVERAGE = int(os.getenv('DEFAULT_LEVERAGE', '10'))
 MARGIN_MODE = int(os.getenv('MARGIN_MODE', '1'))
@@ -28,5 +32,7 @@ STATE_FILE = os.getenv('STATE_FILE', 'toobit_state.json')
 
 if MAX_MARGIN_PCT_PER_ENTRY <= 0 or MAX_MARGIN_PCT_PER_ENTRY > 0.06:
     raise ValueError('MAX_MARGIN_PCT_PER_ENTRY must be >0 and <= 0.06')
+if FALLBACK_MARGIN_USDT <= 0:
+    raise ValueError('FALLBACK_MARGIN_USDT must be > 0')
 if TP1_PCT + TP2_PCT + TP3_PCT > 1.000001:
     raise ValueError('TP percentages must not exceed 100%')
